@@ -1,0 +1,16 @@
+# Собранные бинари и всё, что кладётся рядом с ними.
+/dist/
+
+# Агент попадает в каталог сборки образа только на время сборки:
+# build.ps1 кладёт его в dist/docker, а в исходниках ему не место.
+/deploy/docker/autobak-agent-linux-*
+/test/docker/autobak-agent
+/test/docker/integration.test
+
+# Каталог vendor создаётся только для запуска гонок в контейнере без
+# сети (go mod vendor + GOFLAGS=-mod=vendor). В репозитории ему не место:
+# 25 МБ копий чужого кода, полностью выводимых из go.mod и go.sum.
+/vendor/
+
+# Пароль от веб-интерфейса. Рядом лежит .env.example - его и коммитим.
+.env

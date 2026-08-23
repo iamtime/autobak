@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+# Версия Go берётся из go.mod, чтобы CI и разработка не разъезжались.
+jobs:
+  test:
+    name: Проверки и юнит-тесты
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          out=$(gofmt -l $(git ls-files '*.go' | grep -v '^vendor/'))
+          if [ -n "$out" ]; then echo "не отформатировано:"; echo "$out"; exit 1; fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Юнит-тесты
+        run: go test ./... -timeout 600s
+
+  build:
+    name: Кросс-сборка
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Агент и веб-сервер - статические, под обе архитектуры Linux.
+      # Оконная версия требует системного webview и в CI не собирается.
+      - name: Сборка агента, веб-сервера и CLI
+        run: |
+          set -eux
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch \
+              go build -trimpath -ldflags "-s -w" -o /tmp/autobak-agent-$arch ./cmd/autobak-agent
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch \
+              go build -trimpath -ldflags "-s -w" -o /tmp/autobak-web-$arch ./cmd/autobak-web
+          done
+          CGO_ENABLED=0 go build -trimpath -o /tmp/autobak ./cmd/autobak
+
+  integration:
+    name: Интеграция (Linux-стенд)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Стенд - Debian с настоящими MariaDB, PostgreSQL, nginx, sshd и Docker.
+      # Агент и тестовый бинарь собираются здесь и кладутся в образ готовыми.
+      - name: Сборка бинарей стенда
+        run: |
+          set -eux
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -trimpath -ldflags "-s -w -X main.Version=ci" \
+            -o test/docker/autobak-agent ./cmd/autobak-agent
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go test -c -tags integration -o test/docker/integration.test ./test/integration
+
+      - name: Сборка образа стенда
+        run: docker build -t autobak-testbed --build-arg WITH_DOCKER=1 test/docker
+
+      - name: Прогон интеграционных тестов
+        run: docker run --rm -e PRIVILEGED=1 --privileged autobak-testbed test
+
+  race:
+    name: Детектор гонок
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: go test -race
+        run: go test -race ./... -timeout 900s

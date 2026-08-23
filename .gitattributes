@@ -1,0 +1,23 @@
+# Переводы строк фиксируются явно: репозиторий собирается и на Windows, и на
+# Linux, а часть файлов ломается от «не тех» переводов строк.
+
+# По умолчанию git сам решает, что текст, и нормализует к LF в истории.
+* text=auto eol=lf
+
+# Скрипты, исполняемые на сервере, ОБЯЗАНЫ быть LF: CRLF в shebang-строке
+# превращает интерпретатор в "/bin/sh\r" и скрипт не запускается.
+*.sh   text eol=lf
+*.go   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# .cmd исполняется cmd.exe и должен оставаться CRLF.
+*.cmd  text eol=crlf
+# PowerShell 5.1 разбирает .ps1 надёжнее с CRLF.
+*.ps1  text eol=crlf
+
+# Бинарное - не трогать.
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.pdf  binary

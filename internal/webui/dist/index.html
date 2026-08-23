@@ -1,0 +1,1474 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AutoBak</title>
+<style>
+/* ── Тема ────────────────────────────────────────────────────────────── */
+:root {
+  --bg: #0f1115;
+  --panel: #16191f;
+  --panel-2: #1c2028;
+  --line: #262b35;
+  --text: #e6e9ef;
+  --muted: #8b93a3;
+  --accent: #4c8dff;
+  --accent-dim: #2b4f8f;
+  --ok: #3ecf8e;
+  --warn: #f0b429;
+  --danger: #f2545b;
+  --radius: 8px;
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f6f9; --panel: #ffffff; --panel-2: #f0f2f6; --line: #dfe3ea;
+    --text: #1a1d24; --muted: #6b7383; --accent: #2563eb; --accent-dim: #bfd3fb;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 13.5px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
+  display: flex; flex-direction: column; overflow: hidden;
+  user-select: none;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+input, select { font: inherit; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Каркас ──────────────────────────────────────────────────────────── */
+#app { flex: 1; display: flex; min-height: 0; }
+
+#sidebar {
+  width: 252px; flex: none; background: var(--panel);
+  border-right: 1px solid var(--line); display: flex; flex-direction: column;
+}
+#brand {
+  padding: 14px 16px 12px; font-weight: 650; letter-spacing: .3px;
+  display: flex; align-items: baseline; gap: 8px;
+}
+#brand .v { font-size: 11px; color: var(--muted); font-weight: 400; }
+.side-head {
+  padding: 10px 16px 6px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: .8px; color: var(--muted); display: flex;
+  justify-content: space-between; align-items: center;
+}
+.side-head button {
+  background: none; border: none; color: var(--muted); padding: 2px 6px;
+  border-radius: 5px; font-size: 15px; line-height: 1;
+}
+.side-head button:hover { background: var(--panel-2); color: var(--text); }
+#servers { overflow-y: auto; flex: 1; padding: 0 8px; }
+.srv {
+  display: flex; align-items: center; gap: 9px; padding: 8px 9px;
+  border-radius: var(--radius); margin-bottom: 2px; border: 1px solid transparent;
+}
+.srv:hover { background: var(--panel-2); }
+.srv.sel { background: var(--panel-2); border-color: var(--line); }
+.srv .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
+.srv .dot.ok { background: var(--ok); }
+.srv .dot.warn { background: var(--warn); }
+.srv .dot.err { background: var(--danger); }
+.srv .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srv .t { font-size: 11px; color: var(--muted); flex: none; }
+#side-foot { padding: 8px; border-top: 1px solid var(--line); }
+.side-btn {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  padding: 7px 9px; border-radius: var(--radius); color: var(--muted);
+}
+.side-btn:hover { background: var(--panel-2); color: var(--text); }
+
+#main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#head {
+  padding: 14px 20px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 12px; flex: none;
+}
+#head h1 { margin: 0; font-size: 17px; font-weight: 600; }
+#head .sub { color: var(--muted); font-size: 12px; }
+#head .spacer { flex: 1; }
+.badge {
+  font-size: 11px; padding: 2px 7px; border-radius: 20px;
+  background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+}
+.badge.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.badge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.badge.err { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+
+#tabs { display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--line); flex: none; }
+.tab {
+  background: none; border: none; padding: 9px 13px; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab:hover { color: var(--text); }
+.tab.sel { color: var(--text); border-bottom-color: var(--accent); }
+
+#view { flex: 1; overflow-y: auto; padding: 18px 20px 24px; min-height: 0; }
+
+/* ── Элементы ────────────────────────────────────────────────────────── */
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;
+}
+.card h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+.card h2 .hint { font-weight: 400; color: var(--muted); margin-left: 8px; font-size: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+.stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+.stat .v { font-size: 19px; font-weight: 600; margin-top: 2px; }
+.stat .v.sm { font-size: 14px; font-weight: 500; }
+
+.btn {
+  background: var(--panel-2); border: 1px solid var(--line); padding: 6px 13px;
+  border-radius: var(--radius); color: var(--text);
+}
+.btn:hover:not(:disabled) { border-color: var(--muted); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.1); }
+.btn.danger { border-color: color-mix(in srgb, var(--danger) 50%, transparent); color: var(--danger); }
+.btn.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.btn.sm { padding: 3px 9px; font-size: 12px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .6px;
+  color: var(--muted); font-weight: 500; padding: 6px 10px; border-bottom: 1px solid var(--line);
+}
+td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--panel-2); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--mono); font-size: 12px; }
+/* Диалоги выбора файла и открытие каталога в проводнике существуют
+   только в оконной версии: сервер не может открыть окно на чужой
+   машине. В браузере путь вводится вручную. */
+body.web .os-only { display: none !important; }
+body.web .web-only { display: block !important; }
+
+label.field { display: block; margin-bottom: 11px; }
+label.field > span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+label.field > span .req { color: var(--danger); }
+input[type=text], input[type=password], input[type=number], select {
+  width: 100%; background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px;
+  user-select: text;
+}
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+.check { display: flex; align-items: flex-start; gap: 9px; padding: 8px 4px; }
+.check input { margin-top: 3px; accent-color: var(--accent); }
+.check .body { flex: 1; min-width: 0; }
+.check .body .t { font-weight: 500; }
+.check .body .d { font-size: 12px; color: var(--muted); word-break: break-all; }
+.mut { color: var(--muted); }
+.empty { text-align: center; color: var(--muted); padding: 40px 20px; }
+.empty h3 { font-weight: 600; margin: 0 0 6px; color: var(--text); }
+
+.note {
+  border-left: 3px solid var(--accent); background: var(--panel-2);
+  padding: 9px 12px; border-radius: 0 6px 6px 0; font-size: 12.5px; margin: 10px 0;
+}
+.note.warn { border-color: var(--warn); }
+.note.danger { border-color: var(--danger); }
+
+/* ── Нижняя панель ───────────────────────────────────────────────────── */
+#foot {
+  flex: none; border-top: 1px solid var(--line); background: var(--panel);
+  display: flex; flex-direction: column;
+}
+#bar { display: flex; align-items: center; gap: 12px; padding: 7px 16px; min-height: 38px; }
+#bar .stage { font-size: 12px; min-width: 150px; }
+#bar .prog { flex: 1; height: 4px; background: var(--panel-2); border-radius: 2px; overflow: hidden; }
+#bar .prog i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+#bar .prog.indef i { width: 30%; animation: slide 1.3s ease-in-out infinite; }
+@keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+#bar .counts { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+#log {
+  max-height: 0; overflow-y: auto; transition: max-height .18s;
+  font-family: var(--mono); font-size: 11.5px; padding: 0 16px;
+  border-top: 1px solid transparent; user-select: text;
+}
+#log.open { max-height: 190px; padding: 8px 16px; border-top-color: var(--line); }
+#log div { padding: 1px 0; }
+#log .warn { color: var(--warn); }
+#log .error { color: var(--danger); }
+#log .info { color: var(--muted); }
+
+/* ── Модальные окна ──────────────────────────────────────────────────── */
+#modal-bg {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55);
+  display: none; align-items: center; justify-content: center; z-index: 50;
+  backdrop-filter: blur(2px);
+}
+#modal-bg.open { display: flex; }
+.modal {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  width: min(560px, 92vw); max-height: 88vh; display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,.4);
+}
+.modal.wide { width: min(760px, 94vw); }
+.modal header { padding: 15px 18px 10px; font-size: 15px; font-weight: 600; }
+.modal .body { padding: 0 18px 4px; overflow-y: auto; }
+.modal footer {
+  padding: 12px 18px 15px; display: flex; gap: 8px; justify-content: flex-end;
+  border-top: 1px solid var(--line); margin-top: 12px;
+}
+.modal footer .left { margin-right: auto; }
+
+.recovery {
+  font-family: var(--mono); font-size: 14px; line-height: 1.9; letter-spacing: .5px;
+  background: var(--bg); border: 1px solid var(--warn); border-radius: 8px;
+  padding: 12px 14px; word-break: break-all; user-select: all; margin: 12px 0;
+}
+.crumbs { display: flex; gap: 4px; flex-wrap: wrap; font-size: 12px; margin-bottom: 8px; }
+.crumbs button { background: none; border: none; color: var(--accent); padding: 1px 3px; }
+.crumbs span { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <aside id="sidebar">
+    <div id="brand">AutoBak <span class="v" id="ver"></span></div>
+    <div class="side-head">Серверы <button id="add-server" title="Добавить сервер">+</button></div>
+    <div id="servers"></div>
+    <div id="side-foot">
+      <button class="side-btn" id="nav-repos">Хранилища</button>
+      <button class="side-btn" id="nav-notify">Уведомления</button>
+      <button class="side-btn" id="nav-about">О программе</button>
+      <!-- Выход есть только в браузере: у окна нет сессии, из которой
+           можно выйти. Через fetch со служебным заголовком, а не простой
+           формой: иначе страница злоумышленника разлогинивала бы по кругу. -->
+      <button class="side-btn web-only" id="logout-btn" style="display:none">Выйти</button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div id="head">
+      <div>
+        <h1 id="title">AutoBak</h1>
+        <div class="sub" id="subtitle"></div>
+      </div>
+      <div class="spacer"></div>
+      <div id="head-actions" class="row"></div>
+    </div>
+    <div id="tabs"></div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<div id="foot">
+  <div id="bar">
+    <div class="stage" id="stage">Готов</div>
+    <div class="prog" id="prog"><i></i></div>
+    <div class="counts" id="counts"></div>
+    <button class="btn sm" id="cancel" style="display:none">Отменить</button>
+    <button class="btn sm" id="toggle-log">Журнал</button>
+  </div>
+  <div id="log"></div>
+</div>
+
+<div id="modal-bg"><div class="modal" id="modal"></div></div>
+
+<script>
+"use strict";
+
+/* ── Мост к ядру ──────────────────────────────────────────────────────
+   Страница одна на два варианта запуска. В окне методы ядра проброшены
+   мостом Wails; в браузере их нет, и вместо них подставляется прокси,
+   превращающий любой вызов в запрос к серверу. Имена методов и их
+   аргументы при этом совпадают, поэтому весь остальной код ниже про
+   разницу не знает вовсе. */
+const webAPI = new Proxy({}, {
+  get: (_, name) => (...args) =>
+    fetch("/api/" + name, {
+      method: "POST",
+      // Заголовок обязателен на стороне сервера: форма с чужого сайта
+      // его не поставит, а запрос с ним браузер без спроса не отправит.
+      headers: { "Content-Type": "application/json", "X-Autobak": "1" },
+      body: JSON.stringify(args),
+      credentials: "same-origin",
+    }).then(async (r) => {
+      if (r.status === 401) { location.href = "/login"; throw new Error("сессия истекла"); }
+      const text = await r.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch (e) {
+        throw new Error(text.slice(0, 300) || r.statusText);
+      }
+      if (!r.ok) throw new Error((data && data.error) || r.statusText);
+      return data;
+    }),
+});
+
+const isWindowApp = () => !!(window.go && window.go.main && window.go.main.UI);
+const go = () => (isWindowApp() ? window.go.main.UI : webAPI);
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+const state = { servers: [], repos: [], sel: null, tab: "overview", busy: "", snaps: [], browse: null, platform: "" };
+
+/* ── Журнал и прогресс ───────────────────────────────────────────────── */
+function log(level, msg) {
+  const el = $("log");
+  const d = document.createElement("div");
+  d.className = level;
+  d.textContent = new Date().toLocaleTimeString() + "  " + msg;
+  el.appendChild(d);
+  while (el.childElementCount > 500) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
+  if (level === "error") el.classList.add("open");
+}
+
+$("toggle-log").onclick = () => $("log").classList.toggle("open");
+$("cancel").onclick = () => go().Cancel();
+
+function setBusy(what) {
+  state.busy = what;
+  $("stage").textContent = what || "Готов";
+  $("cancel").style.display = what ? "" : "none";
+  $("prog").classList.toggle("indef", !!what);
+  if (!what) {
+    $("prog").querySelector("i").style.width = "0";
+    $("counts").textContent = "";
+  }
+  render();
+}
+
+/* ── Загрузка состояния ──────────────────────────────────────────────── */
+async function reload() {
+  const st = await go().State();
+  state.servers = st.servers || [];
+  state.repos = st.repos || [];
+  state.notify = st.notify || {};
+  state.hasTelegramToken = st.has_telegram_token;
+  state.hasMailPass = st.has_mail_pass;
+  state.platform = st.platform || "";
+  $("ver").textContent = st.version;
+  if (state.sel && !state.servers.find(s => s.id === state.sel)) state.sel = null;
+  if (!state.sel && state.servers.length) state.sel = state.servers[0].id;
+  render();
+}
+
+const cur = () => state.servers.find(s => s.id === state.sel);
+
+function dotClass(s) {
+  if (!s.last_time) return "";
+  if (s.status === "ошибка") return "err";
+  if (s.status === "с замечаниями") return "warn";
+  return "ok";
+}
+
+/* ── Отрисовка ───────────────────────────────────────────────────────── */
+function render() {
+  $("servers").innerHTML = state.servers.map(s => `
+    <div class="srv ${s.id === state.sel ? "sel" : ""}" data-id="${s.id}">
+      <span class="dot ${dotClass(s)}"></span>
+      <span class="n">${esc(s.name)}</span>
+      <span class="t">${esc(s.last_time ? s.last_time.slice(0, 5) : "-")}</span>
+    </div>`).join("") ||
+    `<div class="empty" style="padding:20px 8px;font-size:12px">Серверов пока нет</div>`;
+
+  document.querySelectorAll(".srv").forEach(el =>
+    el.onclick = () => { state.sel = el.dataset.id; state.tab = "overview"; state.snaps = []; render(); });
+
+  const s = cur();
+  if (state.tab === "repos") return renderRepos();
+  if (state.tab === "notify") return renderNotify();
+  if (state.tab === "about") return renderAbout();
+  if (!s) return renderWelcome();
+
+  $("title").textContent = s.name;
+  $("subtitle").innerHTML =
+    `${esc(s.address)} · хранилище <b>${esc(s.repo_name || "?")}</b> · ` +
+    `${s.mode === "push" ? "сервер пишет сам" : "забирает этот компьютер"}`;
+
+  $("head-actions").innerHTML = `
+    <button class="btn primary" id="do-backup" ${state.busy || !s.has_plan ? "disabled" : ""}>Бэкап сейчас</button>
+    <button class="btn" id="do-discover" ${state.busy ? "disabled" : ""}>Обследовать</button>`;
+  $("do-backup").onclick = doBackup;
+  $("do-discover").onclick = doDiscover;
+
+  const tabs = [["overview", "Обзор"], ["plan", "План"], ["snapshots", "Снимки"], ["settings", "Настройки"]];
+  $("tabs").innerHTML = tabs.map(([k, t]) =>
+    `<button class="tab ${state.tab === k ? "sel" : ""}" data-tab="${k}">${t}</button>`).join("");
+  document.querySelectorAll(".tab").forEach(el =>
+    el.onclick = () => { state.tab = el.dataset.tab; render(); if (state.tab === "snapshots") loadSnaps(); });
+
+  ({ overview: renderOverview, plan: renderPlan, snapshots: renderSnaps, settings: renderSettings }
+    [state.tab] || renderOverview)(s);
+}
+
+function renderWelcome() {
+  $("title").textContent = "AutoBak";
+  $("subtitle").textContent = "";
+  $("head-actions").innerHTML = "";
+  $("tabs").innerHTML = "";
+  $("view").innerHTML = `
+    <div class="empty">
+      <h3>Ни одного сервера пока не добавлено</h3>
+      <p>Сначала подключите хранилище - туда лягут бэкапы.<br>
+         Затем добавьте сервер, и AutoBak сам найдёт на нём сайты, базы и конфигурации.</p>
+      <div class="row" style="justify-content:center;margin-top:16px">
+        <button class="btn primary" onclick="modalRepo()">Подключить хранилище</button>
+        <button class="btn" onclick="modalServer()">Добавить сервер</button>
+      </div>
+    </div>`;
+}
+
+function renderOverview(s) {
+  const problem = s.last_error
+    ? `<div class="note danger"><b>Последний бэкап не удался.</b><br>${esc(s.last_error)}</div>` : "";
+  const partial = s.status === "с замечаниями"
+    ? `<div class="note warn">Последний снимок сделан, но часть модулей не отработала.
+       Откройте вкладку «Снимки», чтобы увидеть подробности.</div>` : "";
+  const noPlan = !s.has_plan
+    ? `<div class="note">План бэкапа ещё не составлен. Нажмите «Обследовать» -
+       агент найдёт сайты, базы и конфигурации, и вам останется отметить нужное.</div>` : "";
+
+  $("view").innerHTML = `
+    ${problem}${partial}${noPlan}
+    <div class="card">
+      <div class="grid">
+        <div class="stat"><div class="k">Состояние</div><div class="v sm">${esc(s.status)}</div></div>
+        <div class="stat"><div class="k">Последний бэкап</div><div class="v sm">${esc(s.last_time || "-")}</div></div>
+        <div class="stat"><div class="k">Объём</div><div class="v sm">${esc(s.last_bytes || "-")}</div></div>
+        <div class="stat"><div class="k">Расписание</div><div class="v sm">${esc(s.schedule)}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Что бэкапится <span class="hint">${s.modules.filter(m => m.enabled).length} из ${s.modules.length} модулей</span></h2>
+      ${s.modules.length ? s.modules.filter(m => m.enabled).map(m => `
+        <div class="check"><input type="checkbox" checked disabled>
+          <div class="body"><div class="t">${esc(m.title)}: ${esc(m.name)}</div>
+          <div class="d">${esc(m.detail)}</div></div></div>`).join("")
+        : `<div class="mut">План пуст.</div>`}
+    </div>
+    <div class="card">
+      <h2>Хранение <span class="hint">${esc(s.retention)}</span></h2>
+      <div class="row">
+        <button class="btn" id="do-prune" ${state.busy ? "disabled" : ""}>Проверить, что можно удалить</button>
+        <button class="btn" id="do-verify" ${state.busy ? "disabled" : ""}>Проверить целостность</button>
+        <button class="btn" id="do-drill" ${state.busy || !s.last_time ? "disabled" : ""}>Проверить восстановлением</button>
+      </div>
+      <div class="note">«Проверить целостность» отвечает на вопрос «данные целы?».
+        «Проверить восстановлением» - на вопрос «а из них получается то же самое?».
+        Второе строго сильнее: оно раскладывает выборку на диск и сверяет результат.</div>
+    </div>`;
+  $("do-prune").onclick = () => doPrune(s);
+  $("do-verify").onclick = () => doVerify(s);
+  $("do-drill").onclick = () => doDrill(s);
+}
+
+async function doDrill(s) {
+  $("log").classList.add("open");
+  try {
+    const r = await go().Drill(s.id, "", 1024);
+    await reload();
+    const ok = (!r.mismatches || !r.mismatches.length) && (!r.problems || !r.problems.length);
+    alertModal(ok ? "Снимок пригоден" : "Снимок непригоден", `
+      <p>Снимок <span class="mono">${esc(r.snapshot_id)}</span>:
+      восстановлено и сверено файлов <b>${r.files_checked}</b> из ${r.files_in_snapshot}
+      (${fmtBytes(r.bytes_checked)}) за ${esc(r.duration)}.</p>
+      ${ok
+        ? `<div class="note">Данные не просто целы - из них получается ровно то,
+           что было записано. Выборка случайная, так что следующая проверка
+           возьмёт другие файлы.</div>`
+        : `<div class="note danger">
+           ${(r.mismatches || []).slice(0, 5).map(esc).join("<br>")}
+           ${(r.problems || []).slice(0, 5).map(esc).join("<br>")}</div>`}`);
+  } catch (e) { fail(e); }
+}
+
+function renderPlan(s) {
+  $("view").innerHTML = `
+    <div class="card">
+      <h2>Модули бэкапа
+        <span class="hint">снимите галочку, чтобы исключить</span></h2>
+      ${s.modules.length ? s.modules.map((m, i) => `
+        <div class="check">
+          <input type="checkbox" data-i="${i}" ${m.enabled ? "checked" : ""}>
+          <div class="body">
+            <div class="t">${esc(m.title)}: ${esc(m.name)}</div>
+            <div class="d">${esc(m.detail)}</div>
+          </div>
+        </div>`).join("")
+      : `<div class="empty"><h3>План пуст</h3>
+         <p>Нажмите «Обследовать сервер» - AutoBak составит план по тому, что реально нашёл.</p></div>`}
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary" id="resuggest" ${state.busy ? "disabled" : ""}>Обследовать и пересобрать план</button>
+      </div>
+    </div>`;
+  document.querySelectorAll("#view input[type=checkbox]").forEach(el =>
+    el.onchange = async () => {
+      try { await go().ToggleModule(s.id, +el.dataset.i, el.checked); await reload(); }
+      catch (e) { fail(e); el.checked = !el.checked; }
+    });
+  $("resuggest").onclick = () => doDiscover(true);
+}
+
+async function loadSnaps() {
+  const s = cur(); if (!s) return;
+  try { state.snaps = await go().Snapshots(s.id); }
+  catch (e) { fail(e); state.snaps = []; }
+  if (state.tab === "snapshots") renderSnaps(s);
+}
+
+function renderSnaps(s) {
+  if (!state.snaps.length) {
+    $("view").innerHTML = `<div class="empty"><h3>Снимков ещё нет</h3>
+      <p>Нажмите «Бэкап сейчас» вверху справа.</p></div>`;
+    return;
+  }
+  $("view").innerHTML = `
+    <div class="card" style="padding:4px 6px">
+      <table>
+        <thead><tr><th>Снимок</th><th>Когда</th><th class="num">Файлов</th>
+          <th class="num">Объём</th><th class="num">Прирост</th><th>Состояние</th><th></th></tr></thead>
+        <tbody>${state.snaps.map(sn => `
+          <tr>
+            <td class="mono">${esc(sn.id)}</td>
+            <td>${esc(sn.time)}</td>
+            <td class="num">${sn.files.toLocaleString("ru")}</td>
+            <td class="num">${esc(sn.total)}</td>
+            <td class="num">${esc(sn.stored)}</td>
+            <td>${sn.complete ? '<span class="badge ok">полный</span>'
+                              : '<span class="badge warn" title="' + esc((sn.failed || []).join("; ")) + '">неполный</span>'}</td>
+            <td style="text-align:right">
+              <button class="btn sm" data-browse="${sn.id}">Смотреть</button>
+              <button class="btn sm" data-restore="${sn.id}">Восстановить</button>
+            </td>
+          </tr>`).join("")}</tbody>
+      </table>
+    </div>`;
+  document.querySelectorAll("[data-browse]").forEach(el =>
+    el.onclick = () => modalBrowse(s, el.dataset.browse, "/"));
+  document.querySelectorAll("[data-restore]").forEach(el =>
+    el.onclick = () => modalRestore(s, el.dataset.restore, []));
+}
+
+function renderSettings(s) {
+  const g = s.git || {};
+  $("view").innerHTML = `
+    <div class="card">
+      <h2>Расписание</h2>
+      <label class="check"><input type="checkbox" id="sc-on" ${s.sched.enabled ? "checked" : ""}>
+        <div class="body"><div class="t">Бэкапить автоматически</div>
+        <div class="d">Запуск выполняет планировщик задач Windows командой
+        <span class="mono">autobak schedule run</span> - программа для этого может быть закрыта.</div></div></label>
+      <div class="row">
+        <label class="field" style="width:120px"><span>Час</span>
+          <input type="number" id="sc-h" min="0" max="23" value="${s.sched.at_hour}"></label>
+        <label class="field" style="width:120px"><span>Минута</span>
+          <input type="number" id="sc-m" min="0" max="59" value="${s.sched.at_minute}"></label>
+        <label class="field" style="width:180px"><span>или раз в N часов</span>
+          <input type="number" id="sc-e" min="0" max="24" value="${s.sched.every_hours || 0}"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Сколько снимков хранить <span class="hint">схема «дед-отец-сын»</span></h2>
+      <div class="row">
+        ${[["last", "Последних"], ["daily", "Дневных"], ["weekly", "Недельных"],
+           ["monthly", "Месячных"], ["yearly", "Годовых"]].map(([k, t]) => `
+          <label class="field" style="width:110px"><span>${t}</span>
+            <input type="number" id="rt-${k}" min="0" value="${s.ret[k] || 0}"></label>`).join("")}
+      </div>
+      <div class="note">Последний снимок сервера не удаляется никогда, какой бы ни была политика.</div>
+    </div>
+
+    <div class="card">
+      <h2>Режим работы</h2>
+      <label class="field"><span>Кто выполняет бэкап</span>
+        <select id="mode">
+          <option value="pull" ${s.mode === "pull" ? "selected" : ""}>Этот компьютер забирает данные по SSH</option>
+          <option value="push" ${s.mode === "push" ? "selected" : ""}>Сервер пишет в хранилище сам, по таймеру</option>
+        </select></label>
+      <div class="note">В режиме «забирает компьютер» на сервере нет ни ключей от репозитория,
+        ни доступа к хранилищу - но бэкап идёт только при включённом компьютере.</div>
+    </div>
+
+    <div class="card">
+      <h2>История конфигураций в git <span class="hint">не хранилище бэкапов, а журнал изменений</span></h2>
+      <label class="check"><input type="checkbox" id="git-on" ${g.enabled ? "checked" : ""}>
+        <div class="body"><div class="t">Коммитить конфигурации после каждого бэкапа</div>
+        <div class="d">В git уезжают только текстовые конфиги, шаблоны панели, compose-файлы
+        и структура баз без данных. Файлы, похожие на секреты (.env, ключи, пароли), пропускаются.</div></div></label>
+      <label class="field"><span>Адрес репозитория <span class="mut">(пусто - вести историю только локально)</span></span>
+        <input type="text" id="git-remote" value="${esc(g.remote || "")}" placeholder="git@git.example.com:ops/configs.git"></label>
+      <div class="row">
+        <label class="field" style="flex:1"><span>Ветка</span>
+          <input type="text" id="git-branch" value="${esc(g.branch || "main")}"></label>
+        <label class="field" style="flex:1"><span>Ключ SSH <span class="mut">(для git@…)</span></span>
+          <input type="text" id="git-key" value="${esc(g.ssh_key || "")}"></label>
+      </div>
+      <div class="row">
+        <label class="field" style="flex:1"><span>Пользователь <span class="mut">(для https)</span></span>
+          <input type="text" id="git-user" value="${esc(g.user || "")}"></label>
+        <label class="field" style="flex:1"><span>Токен <span class="mut">(сохраняется в защищённом хранилище)</span></span>
+          <input type="password" id="git-token" placeholder="${g.remote ? "оставьте пустым, чтобы не менять" : ""}"></label>
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" id="save-settings">Сохранить</button>
+      <div style="flex:1"></div>
+      <button class="btn danger" id="del-server">Удалить сервер из программы</button>
+    </div>`;
+
+  $("save-settings").onclick = async () => {
+    try {
+      await go().SaveSchedule(s.id, {
+        enabled: $("sc-on").checked,
+        at_hour: +$("sc-h").value, at_minute: +$("sc-m").value,
+        every_hours: +$("sc-e").value,
+      }, {
+        last: +$("rt-last").value, hourly: 0, daily: +$("rt-daily").value,
+        weekly: +$("rt-weekly").value, monthly: +$("rt-monthly").value,
+        yearly: +$("rt-yearly").value, keep_within: s.ret.keep_within || "48h0m0s",
+      }, $("mode").value);
+      await go().SaveGit(s.id, {
+        enabled: $("git-on").checked, remote: $("git-remote").value.trim(),
+        branch: $("git-branch").value.trim() || "main", ssh_key: $("git-key").value.trim(),
+        user: $("git-user").value.trim(), work_dir: (s.git || {}).work_dir || "",
+      }, $("git-token").value);
+      log("info", "настройки сохранены");
+      await reload();
+    } catch (e) { fail(e); }
+  };
+  $("del-server").onclick = async () => {
+    const ok = await confirmName("сервера", s.name,
+      "Сервер исчезнет из программы. Уже сделанные снимки останутся в хранилище.");
+    if (!ok) return;
+    try { await go().RemoveServer(s.id); state.sel = null; await reload(); }
+    catch (e) { fail(e); }
+  };
+}
+
+function renderNotify() {
+  $("title").textContent = "Уведомления";
+  $("subtitle").textContent = "чтобы не узнать о пропаже бэкапов в день аварии";
+  $("head-actions").innerHTML = "";
+  $("tabs").innerHTML = "";
+
+  const n = state.notify || {};
+  const tg = n.telegram || {}, wh = n.webhook || {}, mail = n.mail || {};
+  $("view").innerHTML = `
+    <div class="note">Молча падающий бэкап опаснее отсутствующего: об отсутствующем
+      вы хотя бы знаете. Настройте хотя бы один канал.</div>
+
+    <div class="card">
+      <label class="check"><input type="checkbox" id="nt-on" ${n.enabled ? "checked" : ""}>
+        <div class="body"><div class="t">Сообщать о сбоях</div>
+        <div class="d">Об ошибках - всегда. Об остальном - по настройкам ниже.</div></div></label>
+      <label class="check"><input type="checkbox" id="nt-partial" ${n.on_partial !== false ? "checked" : ""}>
+        <div class="body"><div class="t">Сообщать о неполных снимках</div>
+        <div class="d">Снимок сделан, но часть модулей не отработала. В списке он
+        выглядит обычным, а при восстановлении окажется без баз.</div></div></label>
+      <label class="check"><input type="checkbox" id="nt-success" ${n.on_success ? "checked" : ""}>
+        <div class="body"><div class="t">Сообщать и об удачных бэкапах</div>
+        <div class="d">Обычно не стоит: ежедневное «всё хорошо» перестают читать
+        через неделю, а вместе с ним перестают замечать единственное «всё плохо».</div></div></label>
+    </div>
+
+    <div class="card">
+      <h2>Telegram</h2>
+      <div class="row">
+        <label class="field" style="flex:1"><span>Chat ID</span>
+          <input type="text" id="nt-tg-chat" value="${esc(tg.chat_id || "")}" placeholder="-1001234567890"></label>
+        <label class="field" style="flex:1"><span>Токен бота
+          ${state.hasTelegramToken ? '<span class="mut">- сохранён</span>' : ""}</span>
+          <input type="password" id="nt-tg-token"
+            placeholder="${state.hasTelegramToken ? "оставьте пустым, чтобы не менять" : "123456:AA..."}"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Веб-хук <span class="hint">Slack, Mattermost, Discord и любой приёмник JSON</span></h2>
+      <label class="field"><span>Адрес</span>
+        <input type="text" id="nt-hook" value="${esc(wh.url || "")}" placeholder="https://hooks.slack.com/services/..."></label>
+    </div>
+
+    <div class="card">
+      <h2>Почта</h2>
+      <div class="row">
+        <label class="field" style="flex:2"><span>SMTP-сервер</span>
+          <input type="text" id="nt-mail-host" value="${esc(mail.host || "")}" placeholder="smtp.example.com"></label>
+        <label class="field" style="width:110px"><span>Порт</span>
+          <input type="number" id="nt-mail-port" value="${mail.port || 587}"></label>
+      </div>
+      <div class="row">
+        <label class="field" style="flex:1"><span>Пользователь</span>
+          <input type="text" id="nt-mail-user" value="${esc(mail.user || "")}"></label>
+        <label class="field" style="flex:1"><span>Пароль
+          ${state.hasMailPass ? '<span class="mut">- сохранён</span>' : ""}</span>
+          <input type="password" id="nt-mail-pass"></label>
+      </div>
+      <div class="row">
+        <label class="field" style="flex:1"><span>От кого</span>
+          <input type="text" id="nt-mail-from" value="${esc(mail.from || "")}"></label>
+        <label class="field" style="flex:1"><span>Кому <span class="mut">(через запятую)</span></span>
+          <input type="text" id="nt-mail-to" value="${esc(mail.to || "")}"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Сигнал «я жив» <span class="hint">ловит то, что не поймает ничто другое</span></h2>
+      <label class="field"><span>Адрес, который дёргать после каждого удачного бэкапа</span>
+        <input type="text" id="nt-heartbeat" value="${esc(n.heartbeat_url || "")}"
+          placeholder="https://hc-ping.com/ваш-uuid"></label>
+      <div class="note">Уведомление об ошибке бессильно, если программа вообще не
+        запускалась: ошибки не было - не было ничего. Внешняя служба
+        (healthchecks.io, Uptime Kuma) замечает пропажу сигнала и поднимает тревогу сама.</div>
+      <label class="field" style="max-width:280px"><span>Считать сервер заброшенным через</span>
+        <input type="text" id="nt-stale" value="${esc(n.stale_after || "36h0m0s")}" placeholder="36h"></label>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" id="nt-save">Сохранить</button>
+      <button class="btn" id="nt-test">Отправить пробное сообщение</button>
+      <div style="flex:1"></div>
+      <button class="btn" id="nt-stale-check">Кто давно не бэкапился</button>
+    </div>`;
+
+  const collect = () => ({
+    enabled: $("nt-on").checked,
+    on_partial: $("nt-partial").checked,
+    on_success: $("nt-success").checked,
+    telegram: { chat_id: $("nt-tg-chat").value.trim() },
+    webhook: { url: $("nt-hook").value.trim() },
+    mail: {
+      host: $("nt-mail-host").value.trim(), port: +$("nt-mail-port").value,
+      user: $("nt-mail-user").value.trim(),
+      from: $("nt-mail-from").value.trim(), to: $("nt-mail-to").value.trim(),
+    },
+    heartbeat_url: $("nt-heartbeat").value.trim(),
+    stale_after: $("nt-stale").value.trim() || "36h0m0s",
+  });
+
+  $("nt-save").onclick = async () => {
+    try {
+      await go().SaveNotify(collect(), $("nt-tg-token").value, $("nt-mail-pass").value);
+      log("info", "настройки уведомлений сохранены");
+      await reload();
+      state.tab = "notify";
+      render();
+    } catch (e) { fail(e); }
+  };
+  $("nt-test").onclick = async () => {
+    try {
+      // Сохраняем перед проверкой: иначе проверялось бы прошлое состояние,
+      // и человек решил бы, что настройки верны, хотя ушло старое.
+      await go().SaveNotify(collect(), $("nt-tg-token").value, $("nt-mail-pass").value);
+      await go().TestNotify();
+      alertModal("Отправлено", "<p>Проверьте, дошло ли сообщение. Если нет - смотрите журнал внизу.</p>");
+      await reload();
+    } catch (e) { fail(e); }
+  };
+  $("nt-stale-check").onclick = async () => {
+    try {
+      const stale = await go().CheckStale();
+      if (!stale || !stale.length) {
+        alertModal("Всё в порядке", "<p>Все серверы с включённым расписанием бэкапились вовремя.</p>");
+      } else {
+        alertModal("Давно не бэкапились", `<div class="note danger">${stale.map(esc).join("<br>")}</div>`);
+      }
+    } catch (e) { fail(e); }
+  };
+}
+
+function renderRepos() {
+  $("title").textContent = "Хранилища";
+  $("subtitle").textContent = "куда складываются бэкапы";
+  $("head-actions").innerHTML = `<button class="btn primary" onclick="modalRepo()">Подключить хранилище</button>`;
+  $("tabs").innerHTML = "";
+  if (!state.repos.length) {
+    $("view").innerHTML = `<div class="empty"><h3>Хранилищ пока нет</h3>
+      <p>Локальный каталог, внешний диск или S3-совместимое облако.</p></div>`;
+    return;
+  }
+
+  const single = state.repos.length < 2;
+  $("view").innerHTML = `
+    ${single ? `<div class="note warn"><b>Хранилище одно - значит, точка отказа одна.</b>
+      Подключите второе и настройте копирование: правило «три копии, два носителя,
+      одна вне площадки» существует не зря.</div>` : ""}
+    <div class="card" style="padding:4px 6px"><table>
+      <thead><tr><th>Название</th><th>Тип</th><th>Где</th>
+        <th>Копия</th><th>Проверено восстановлением</th><th></th></tr></thead>
+      <tbody>${state.repos.map(r => `<tr>
+        <td>${esc(r.name)}</td>
+        <td>${r.kind === "s3" ? "S3" : "локальное"}</td>
+        <td class="mono">${esc(r.location)}</td>
+        <td>
+          <select data-mirror="${r.id}" style="min-width:130px">
+            <option value="">не копировать</option>
+            ${state.repos.filter(o => o.id !== r.id).map(o =>
+              `<option value="${esc(o.id)}" ${r.mirror_to === o.id ? "selected" : ""}>→ ${esc(o.name)}</option>`).join("")}
+          </select>
+        </td>
+        <td>${r.last_drill
+              ? (r.last_drill_ok
+                  ? `<span class="badge ok">${esc(r.last_drill)}</span>`
+                  : `<span class="badge err">${esc(r.last_drill)} - не прошло</span>`)
+              : `<span class="badge warn">ни разу</span>`}
+            ${r.drill_due && r.last_drill ? ' <span class="mut">пора</span>' : ""}</td>
+        <td style="text-align:right;white-space:nowrap">
+          ${r.mirror_to ? `<button class="btn sm" data-copy="${r.id}">Скопировать</button>` : ""}
+          <button class="btn sm" data-verify="${r.id}">Проверить</button>
+        </td>
+      </tr>`).join("")}</tbody></table></div>
+
+    <div class="card">
+      <h2>Зачем две проверки <span class="hint">они отвечают на разные вопросы</span></h2>
+      <p><b>Проверить</b> - читает данные и сверяет подписи. Отвечает на вопрос
+      «данные целы?».</p>
+      <p><b>Проверить восстановлением</b> (на вкладке сервера) - восстанавливает
+      выборку на диск и сверяет результат. Отвечает на вопрос «а из них
+      получается то же самое?». Между этими вопросами лежит весь путь:
+      поиск по индексу, расшифровка, распаковка, склейка и запись. Любое
+      звено может сломаться так, что подписи останутся верными.</p>
+    </div>`;
+
+  document.querySelectorAll("[data-verify]").forEach(el =>
+    el.onclick = () => doVerifyRepo(el.dataset.verify));
+  document.querySelectorAll("[data-mirror]").forEach(el =>
+    el.onchange = async () => {
+      try { await go().SetMirror(el.dataset.mirror, el.value); await reload(); }
+      catch (e) { fail(e); }
+    });
+  document.querySelectorAll("[data-copy]").forEach(el =>
+    el.onclick = () => doMirror(el.dataset.copy));
+}
+
+async function doMirror(repoID) {
+  const r = state.repos.find(x => x.id === repoID);
+  if (!r || !r.mirror_to) return;
+  try {
+    const dry = await go().Mirror(repoID, r.mirror_to, false, false);
+    if (dry.copied === 0) {
+      alertModal("Копия уже актуальна",
+        `<p>В хранилище «${esc(r.mirror_name)}» уже есть всё: ${dry.skipped} объектов.</p>`);
+      await reload();
+      return;
+    }
+    openModal("Копирование во второе хранилище", `
+      <p>Из «${esc(r.name)}» в «${esc(r.mirror_name)}».</p>
+      <p>Будет скопировано объектов: <b>${dry.copied}</b> (${fmtBytes(dry.bytes)}),
+      уже есть: ${dry.skipped}.</p>
+      ${(dry.orphans || []).length ? `<div class="note">В копии ${dry.orphans.length}
+        объектов, которых больше нет в источнике. Они остаются намеренно:
+        копия нужна ровно на случай, когда с источником случилось плохое.</div>` : ""}`, [
+      { text: "Отмена", cls: "btn" },
+      {
+        text: "Скопировать", cls: "btn primary", keep: true, act: async () => {
+          try {
+            const done = await go().Mirror(repoID, r.mirror_to, true, false);
+            closeModal();
+            alertModal("Готово", `<p>Скопировано объектов: ${done.copied}
+              (${fmtBytes(done.bytes)}).</p>
+              ${(done.problems || []).length
+                ? `<div class="note danger">${done.problems.slice(0, 6).map(esc).join("<br>")}</div>` : ""}`);
+            await reload();
+          } catch (e) { fail(e); }
+        }
+      }]);
+  } catch (e) { fail(e); }
+}
+
+async function renderAbout() {
+  $("title").textContent = "О программе";
+  $("subtitle").textContent = "";
+  $("head-actions").innerHTML = "";
+  $("tabs").innerHTML = "";
+  const dir = await go().ConfigDir();
+  $("view").innerHTML = `
+    <div class="card">
+      <h2>Как это устроено</h2>
+      <p>На сервере лежит один исполняемый файл. Он не демон и не слушает портов:
+      запускается по SSH и общается через стандартный ввод-вывод. Даже украв ключ
+      от бэкапов, шелл на сервере получить нельзя - ключ ограничен вызовом только этого агента.</p>
+      <p>Данные режутся на куски по содержимому, сжимаются и шифруются
+      <span class="mono">XChaCha20-Poly1305</span> ещё до отправки в хранилище.
+      Изменённый на килобайт файл добавляет к репозиторию килобайты, а не свой полный размер.</p>
+      <p>У каждого сервера свой ключ шифрования: взлом одного не открывает бэкапы остальных.</p>
+    </div>
+    <div class="card">
+      <h2>Файлы программы</h2>
+      <p class="mono">${esc(dir)}</p>
+      <p class="mut">Здесь настройки и защищённое хранилище паролей.
+      ${state.platform === "windows"
+        ? `Пароли зашифрованы средствами Windows и привязаны к вашей учётной записи:
+           скопированные на другой компьютер, они не откроются.`
+        : `Пароли зашифрованы ключом из файла <span class="mono">secret.key</span> с правами 0600
+           рядом с настройками. Тот, кто прочитает этот каталог, получит и пароли -
+           держите его на диске, доступном только владельцу службы.`}</p>
+      <button class="btn sm os-only" onclick="go().OpenFolder('${esc(dir).replace(/\\/g, "\\\\")}')">Открыть каталог</button>
+    </div>
+    <div class="card">
+      <h2>Автоматический запуск</h2>
+      <p>${state.platform === "windows" ? "Создайте задание в планировщике Windows:" : "Запускайте по расписанию:"}</p>
+      <p class="mono" style="user-select:text">${state.platform === "windows"
+        ? esc("autobak-task.cmd install 1")
+        : esc("autobak schedule run   # из cron, systemd-таймера или планировщика контейнера")}</p>
+      <p class="mut">Программа сама решит, чьё время подошло, и сделает бэкап.
+      Расписание каждого репозитория задаётся в его настройках.</p>
+    </div>`;
+}
+
+/* ── Операции ────────────────────────────────────────────────────────── */
+function fail(e) {
+  const msg = (e && e.message) || String(e);
+  log("error", msg);
+  alertModal("Не получилось", msg);
+}
+
+async function doBackup() {
+  const s = cur(); if (!s) return;
+  $("log").classList.add("open");
+  try {
+    const r = await go().Backup(s.id);
+    await reload();
+    if (state.tab === "snapshots") loadSnaps();
+    const extra = r.complete ? "" :
+      `<div class="note warn"><b>Снимок неполон.</b><br>${r.failed.map(esc).join("<br>")}</div>`;
+    alertModal("Бэкап готов", `
+      <p>Снимок <span class="mono">${esc(r.snapshot_id)}</span> за ${esc(r.duration)}.</p>
+      <div class="grid">
+        <div class="stat"><div class="k">Файлов</div><div class="v sm">${r.files.toLocaleString("ru")}</div></div>
+        <div class="stat"><div class="k">Прочитано</div><div class="v sm">${esc(r.total)}</div></div>
+        <div class="stat"><div class="k">Новых данных</div><div class="v sm">${esc(r.new)}</div></div>
+        <div class="stat"><div class="k">В хранилище</div><div class="v sm">${esc(r.stored)}</div></div>
+      </div>${extra}`);
+  } catch (e) { fail(e); }
+}
+
+async function doDiscover(applyPlan) {
+  const s = cur(); if (!s) return;
+  try {
+    const rep = await go().Discover(s.id);
+    const sites = (rep.sites || []).map(x =>
+      `<tr><td>${esc(x.name)}</td><td class="mono">${esc(x.root)}</td>
+       <td>${esc(x.php || "")}</td><td class="num">${fmtBytes(x.size)}</td>
+       <td>${esc((x.databases || []).join(", "))}</td></tr>`).join("");
+    const dbs = ((rep.mysql || {}).databases || []).map(d =>
+      `<tr><td>${esc(d.name)}</td><td class="num">${fmtBytes(d.size)}</td><td>${esc(d.owner || "")}</td></tr>`).join("");
+
+    let body = `<p>${esc(rep.os)}${rep.panel ? " · " + esc(rep.panel.kind + " " + (rep.panel.version || "")) : ""}</p>`;
+    if (sites) body += `<h2 style="font-size:13px;margin:14px 0 6px">Сайты</h2>
+      <table><thead><tr><th>Домен</th><th>Каталог</th><th>PHP</th><th class="num">Размер</th><th>Базы</th></tr></thead>
+      <tbody>${sites}</tbody></table>`;
+    if (dbs) body += `<h2 style="font-size:13px;margin:14px 0 6px">Базы MySQL</h2>
+      <table><thead><tr><th>База</th><th class="num">Размер</th><th>Владелец</th></tr></thead><tbody>${dbs}</tbody></table>`;
+    if (rep.docker && rep.docker.version) body +=
+      `<p style="margin-top:12px">Docker ${esc(rep.docker.version)}: контейнеров
+       ${(rep.docker.containers || []).length}, томов ${(rep.docker.volumes || []).length}</p>`;
+    if (rep.configs && rep.configs.length) body +=
+      `<p class="mut" style="font-size:12px">Конфигурации: ${esc(rep.configs.join(", "))}</p>`;
+    (rep.warnings || []).forEach(w => body += `<div class="note warn">${esc(w)}</div>`);
+
+    openModal("Что нашлось на сервере", body + `
+      <div class="note">Первый бэкап передаст примерно <b>${fmtBytes(estimate(rep))}</b>.
+      Дальнейшие будут в десятки раз меньше.</div>`, [
+      { text: "Закрыть", cls: "btn" },
+      {
+        text: "Составить план по найденному", cls: "btn primary", keep: true, act: async () => {
+          try {
+            const p = await go().SuggestPlan(s.id);
+            await go().SavePlan(s.id, p);
+            closeModal(); await reload(); state.tab = "plan"; render();
+            log("info", "план составлен по результатам обследования");
+          } catch (e) { fail(e); }
+        }
+      }]);
+  } catch (e) { fail(e); }
+}
+
+function estimate(rep) {
+  let t = 0;
+  (rep.sites || []).forEach(x => t += x.size || 0);
+  ((rep.mysql || {}).databases || []).forEach(d => t += d.size || 0);
+  ((rep.postgres || {}).databases || []).forEach(d => t += d.size || 0);
+  ((rep.docker || {}).volumes || []).forEach(v => t += v.size || 0);
+  return t;
+}
+
+function fmtBytes(n) {
+  if (!n) return "-";
+  const u = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+  let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i ? n.toFixed(1) : n) + " " + u[i];
+}
+
+async function doPrune(s) {
+  try {
+    const dry = await go().Prune(s.id, false, "");
+    if (!dry.snapshots_removed || !dry.snapshots_removed.length) {
+      alertModal("Удалять нечего", `<p>По политике «${esc(s.retention)}» все ${dry.snapshots_kept}
+        снимков нужно сохранить.</p>`);
+      return;
+    }
+    openModal("Очистка старых снимков", `
+      <p>Политика хранения: <b>${esc(s.retention)}</b></p>
+      <p>Будет удалено снимков: <b>${dry.snapshots_removed.length}</b>, останется ${dry.snapshots_kept}.<br>
+      Освободится примерно <b>${fmtBytes(dry.bytes_freed)}</b>.</p>
+      <div class="note danger">Удаление снимков необратимо.</div>
+      <label class="field"><span>Наберите имя сервера для подтверждения: <b>${esc(s.name)}</b></span>
+        <input type="text" id="confirm-input" autocomplete="off"></label>`, [
+      { text: "Отмена", cls: "btn" },
+      {
+        text: "Удалить", cls: "btn danger", keep: true, act: async () => {
+          try {
+            const r = await go().Prune(s.id, true, $("confirm-input").value.trim());
+            closeModal();
+            log("info", "очистка: " + r.snapshots_removed.length + " снимков удалено");
+            await loadSnaps(); await reload();
+          } catch (e) { fail(e); }
+        }
+      }]);
+  } catch (e) { fail(e); }
+}
+
+async function doVerify(s) { doVerifyRepo(s.repo_id); }
+
+async function doVerifyRepo(repoID) {
+  try {
+    const r = await go().Verify(repoID, 0.05);
+    const ok = r.chunks_missing === 0 && r.chunks_bad === 0 && r.trees_bad === 0;
+    alertModal(ok ? "Репозиторий цел" : "Найдены проблемы", `
+      <p>Проверено снимков: ${r.snapshots_checked}, чанков в них: ${r.chunks_referenced},
+      реально прочитано: ${r.chunks_read} (выборка 5%).</p>
+      ${ok ? `<div class="note">Всё читается и проходит проверку подписи.</div>`
+           : `<div class="note danger">Потеряно чанков: ${r.chunks_missing},
+              повреждено: ${r.chunks_bad}, нечитаемых снимков: ${r.trees_bad}.
+              <br>${(r.problems || []).slice(0, 8).map(esc).join("<br>")}</div>`}`);
+  } catch (e) { fail(e); }
+}
+
+/* ── Просмотр снимка ─────────────────────────────────────────────────── */
+async function modalBrowse(s, snapID, prefix) {
+  try {
+    const items = await go().Browse(s.id, snapID, prefix);
+    const parts = prefix.split("/").filter(Boolean);
+    const crumbs = [`<button data-go="/">/</button>`].concat(parts.map((p, i) =>
+      `<span>›</span><button data-go="${esc("/" + parts.slice(0, i + 1).join("/"))}">${esc(p)}</button>`)).join("");
+
+    openModal(`Снимок ${snapID}`, `
+      <div class="crumbs">${crumbs}</div>
+      <div style="max-height:46vh;overflow:auto"><table><tbody>
+      ${items.length ? items.map(e => `<tr>
+        <td style="width:26px">${e.dir ? "📁" : "📄"}</td>
+        <td>${e.dir ? `<button class="btn sm" data-go="${esc(e.path)}" style="border:none;background:none;padding:0">${esc(e.name)}</button>`
+                    : esc(e.name)}</td>
+        <td class="num mut">${esc(e.size)}</td>
+        <td style="width:110px;text-align:right">
+          <button class="btn sm" data-pick="${esc(e.path)}">Восстановить</button></td>
+      </tr>`).join("") : `<tr><td class="mut" style="padding:20px">Пусто</td></tr>`}
+      </tbody></table></div>`, [
+      { text: "Закрыть", cls: "btn" },
+      { text: "Восстановить весь снимок", cls: "btn primary", keep: true,
+        act: () => modalRestore(s, snapID, []) }
+    ], "wide");
+
+    document.querySelectorAll("[data-go]").forEach(el =>
+      el.onclick = () => modalBrowse(s, snapID, el.dataset.go));
+    document.querySelectorAll("[data-pick]").forEach(el =>
+      el.onclick = () => modalRestore(s, snapID, [el.dataset.pick]));
+  } catch (e) { fail(e); }
+}
+
+/* ── Восстановление ──────────────────────────────────────────────────── */
+function modalRestore(s, snapID, include) {
+  const what = include.length ? `<span class="mono">${esc(include[0])}</span>` : "весь снимок";
+  openModal("Восстановление", `
+    <p>Снимок <span class="mono">${esc(snapID)}</span>, ${what}</p>
+    <label class="field"><span>Куда</span>
+      <select id="r-dest">
+        <option value="local">Скачать на этот компьютер (ничего на сервере не изменится)</option>
+        <option value="server">Вернуть на сервер ${esc(s.name)}</option>
+      </select></label>
+    <div id="r-local">
+      <label class="field"><span>Каталог <span class="mut">(пусто - в папку программы)</span></span>
+        <div class="row"><input type="text" id="r-dir" style="flex:1">
+        <button class="btn os-only" id="r-pick">Выбрать…</button></div></label>
+    </div>
+    <div id="r-server" style="display:none">
+      <label class="check"><input type="checkbox" id="r-over">
+        <div class="body"><div class="t">Перезаписывать существующие файлы</div>
+        <div class="d">Без этого занятые пути будут пропущены, а не затёрты.</div></div></label>
+      <label class="field"><span>Дампы баз данных</span>
+        <select id="r-db">
+          <option value="file">Положить файлами, не трогая СУБД</option>
+          <option value="restore">Залить в СУБД под новыми именами (<span class="mono">имя_restore_дата</span>)</option>
+          <option value="skip">Пропустить</option>
+        </select></label>
+      <label class="check" id="r-inplace-wrap" style="display:none">
+        <input type="checkbox" id="r-inplace">
+        <div class="body"><div class="t">Залить поверх боевых баз</div>
+        <div class="d">Текущее содержимое этих баз будет заменено безвозвратно.</div></div></label>
+    </div>
+    <div id="r-preview"></div>`, [
+    { text: "Отмена", cls: "btn" },
+    { text: "Показать, что произойдёт", cls: "btn primary", keep: true, act: () => previewRestore(s, snapID, include) }
+  ], "wide");
+
+  $("r-dest").onchange = () => {
+    const server = $("r-dest").value === "server";
+    $("r-local").style.display = server ? "none" : "";
+    $("r-server").style.display = server ? "" : "none";
+    $("r-preview").innerHTML = "";
+  };
+  $("r-db").onchange = () =>
+    $("r-inplace-wrap").style.display = $("r-db").value === "restore" ? "" : "none";
+  $("r-pick").onclick = async () => {
+    try { const d = await go().PickFolder("Куда восстановить"); if (d) $("r-dir").value = d; }
+    catch (e) { fail(e); }
+  };
+}
+
+function restoreReq(s, snapID, include) {
+  const server = $("r-dest").value === "server";
+  return {
+    server_id: s.id, snapshot_id: snapID, include,
+    to_server: server, local_dir: server ? "" : $("r-dir").value.trim(),
+    overwrite: server ? $("r-over").checked : false,
+    db_mode: server ? $("r-db").value : "file",
+    db_in_place: server && $("r-db").value === "restore" && $("r-inplace").checked,
+    confirm: "",
+  };
+}
+
+async function previewRestore(s, snapID, include) {
+  const req = restoreReq(s, snapID, include);
+  try {
+    const rep = await go().RestorePreview(req);
+    const danger = req.to_server || req.overwrite || req.db_in_place;
+    const over = (rep.overwrites || []).length;
+    $("r-preview").innerHTML = `
+      <div class="note ${danger ? "warn" : ""}">
+        <b>Будет восстановлено:</b> файлов ${rep.files}, каталогов ${rep.dirs}, ${fmtBytes(rep.bytes)}.
+        ${(rep.databases || []).length ? `<br>Базы: ${rep.databases.map(esc).join(", ")}` : ""}
+        ${over ? `<br><b>Будет перезаписано файлов: ${over}</b>` : ""}
+        ${rep.overwrite_unknown ? `<br><b>Восстановление на сервер:</b> какие файлы будут
+          перезаписаны, заранее не показать - предпросмотр не видит содержимое сервера.
+          Существующие файлы по совпадающим путям будут заменены.` : ""}
+        ${(rep.problems || []).length ? `<br>Замечания: ${rep.problems.slice(0, 3).map(esc).join("; ")}` : ""}
+      </div>
+      ${req.db_in_place ? `<div class="note danger">Боевые базы будут заменены безвозвратно.</div>` : ""}
+      ${danger ? `<label class="field"><span>Наберите имя сервера для подтверждения:
+        <b>${esc(s.name)}</b></span><input type="text" id="confirm-input" autocomplete="off"></label>` : ""}`;
+
+    setFooter([
+      { text: "Отмена", cls: "btn" },
+      {
+        text: danger ? "Восстановить" : "Скачать", cls: danger ? "btn danger" : "btn primary",
+        keep: true, act: async () => {
+          const r2 = restoreReq(s, snapID, include);
+          const ci = $("confirm-input");
+          r2.confirm = ci ? ci.value.trim() : "";
+          try {
+            const done = await go().RestoreApply(r2);
+            closeModal();
+            alertModal("Восстановление завершено", `<p>${esc(done.files)} файлов,
+              ${fmtBytes(done.bytes)}${done.databases && done.databases.length
+                ? ", баз: " + done.databases.length : ""}.</p>`);
+          } catch (e) { fail(e); }
+        }
+      }]);
+  } catch (e) { fail(e); }
+}
+
+/* ── Добавление ──────────────────────────────────────────────────────── */
+function modalRepo() {
+  openModal("Подключить хранилище", `
+    <label class="field"><span>Название <span class="req">*</span></span>
+      <input type="text" id="rp-name" placeholder="Основное"></label>
+    <label class="field"><span>Тип</span>
+      <select id="rp-kind">
+        <option value="local">Каталог на этом компьютере или NAS</option>
+        <option value="s3">S3-совместимое облако</option>
+      </select></label>
+    <div id="rp-local">
+      <label class="field"><span>Каталог <span class="req">*</span></span>
+        <div class="row"><input type="text" id="rp-path" style="flex:1">
+        <button class="btn os-only" id="rp-pick">Выбрать…</button></div></label>
+    </div>
+    <div id="rp-s3" style="display:none">
+      <label class="field"><span>Адрес <span class="req">*</span></span>
+        <input type="text" id="rp-ep" placeholder="s3.us-west-004.backblazeb2.com"></label>
+      <div class="row">
+        <label class="field" style="flex:1"><span>Регион</span><input type="text" id="rp-region"></label>
+        <label class="field" style="flex:1"><span>Бакет <span class="req">*</span></span><input type="text" id="rp-bucket"></label>
+      </div>
+      <label class="field"><span>Подкаталог в бакете</span><input type="text" id="rp-prefix"></label>
+      <div class="row">
+        <label class="field" style="flex:1"><span>Ключ доступа <span class="req">*</span></span><input type="text" id="rp-ak"></label>
+        <label class="field" style="flex:1"><span>Секретный ключ <span class="req">*</span></span><input type="password" id="rp-sk"></label>
+      </div>
+      <div class="note">Выдайте ключу права только на запись и чтение,
+        <b>без удаления</b>, и включите версионирование бакета. Тогда взломанный сервер
+        не сможет стереть бэкапы - а именно этим занимаются шифровальщики в первую очередь.</div>
+    </div>
+    <label class="field"><span>Пароль репозитория <span class="req">*</span>
+      <span class="mut">- им шифруются все данные</span></span>
+      <input type="password" id="rp-pw"></label>
+    <label class="field"><span>Повторите пароль</span><input type="password" id="rp-pw2"></label>`, [
+    { text: "Отмена", cls: "btn" },
+    {
+      text: "Подключить", cls: "btn primary", keep: true, act: async () => {
+        if ($("rp-pw").value !== $("rp-pw2").value) return fail(new Error("пароли не совпали"));
+        const kind = $("rp-kind").value;
+        try {
+          const rec = await go().AddRepo({
+            name: $("rp-name").value.trim(), kind,
+            path: kind === "local" ? $("rp-path").value.trim() : "",
+            endpoint: $("rp-ep") ? $("rp-ep").value.trim() : "",
+            region: $("rp-region") ? $("rp-region").value.trim() : "",
+            bucket: $("rp-bucket") ? $("rp-bucket").value.trim() : "",
+            prefix: $("rp-prefix") ? $("rp-prefix").value.trim() : "",
+            access_key: $("rp-ak") ? $("rp-ak").value.trim() : "",
+            secret_key: $("rp-sk") ? $("rp-sk").value : "",
+            path_style: true, password: $("rp-pw").value,
+          });
+          closeModal(); await reload();
+          if (rec) showRecovery(rec);
+          else alertModal("Готово", "<p>Подключён существующий репозиторий со всей его историей.</p>");
+        } catch (e) { fail(e); }
+      }
+    }]);
+
+  $("rp-kind").onchange = () => {
+    const s3 = $("rp-kind").value === "s3";
+    $("rp-local").style.display = s3 ? "none" : "";
+    $("rp-s3").style.display = s3 ? "" : "none";
+  };
+  $("rp-pick").onclick = async () => {
+    try { const d = await go().PickFolder("Каталог для бэкапов"); if (d) $("rp-path").value = d; }
+    catch (e) { fail(e); }
+  };
+}
+
+function showRecovery(code) {
+  openModal("Запишите recovery-код", `
+    <div class="note danger"><b>Это единственный шанс его увидеть.</b>
+      Код открывает репозиторий, даже если вы потеряете и этот компьютер, и пароль.
+      Без него данные будут утрачены безвозвратно.</div>
+    <div class="recovery">${esc(code)}</div>
+    <p class="mut">Распечатайте или перепишите на бумагу и держите отдельно от компьютера.
+      Хранить его в том же менеджере паролей, что и пароль репозитория, бессмысленно.</p>
+    <label class="check"><input type="checkbox" id="rec-ok">
+      <div class="body"><div class="t">Я записал код и убрал в надёжное место</div></div></label>`, [
+    {
+      text: "Закрыть", cls: "btn primary", keep: true, act: () => {
+        if (!$("rec-ok").checked) return;
+        closeModal();
+      }
+    }]);
+}
+
+function modalServer() {
+  if (!state.repos.length) {
+    return alertModal("Сначала хранилище",
+      "<p>Прежде чем добавлять сервер, подключите хранилище - иначе бэкапам будет некуда лечь.</p>");
+  }
+  openModal("Добавить сервер", `
+    <label class="field"><span>Название <span class="req">*</span></span>
+      <input type="text" id="sv-name" placeholder="prod"></label>
+    <div class="row">
+      <label class="field" style="flex:2"><span>Адрес <span class="req">*</span></span>
+        <input type="text" id="sv-host" placeholder="203.0.113.10 или server.example.com"></label>
+      <label class="field" style="width:100px"><span>Порт</span>
+        <input type="number" id="sv-port" value="22"></label>
+    </div>
+    <div class="row">
+      <label class="field" style="flex:1"><span>Пользователь</span>
+        <input type="text" id="sv-user" value="root"></label>
+      <label class="field" style="flex:2"><span>Ключ SSH <span class="mut">(пусто - как настроено в ssh)</span></span>
+        <input type="text" id="sv-key" placeholder="C:\\Users\\...\\.ssh\\id_ed25519"></label>
+    </div>
+    <label class="field"><span>Или запись из ~/.ssh/config</span>
+      <input type="text" id="sv-alias" placeholder="prod-web"></label>
+    <label class="field"><span>Хранилище</span>
+      <select id="sv-repo">${state.repos.map(r =>
+        `<option value="${esc(r.id)}">${esc(r.name)} - ${esc(r.location)}</option>`).join("")}</select></label>
+    <label class="check"><input type="checkbox" id="sv-sudo">
+      <div class="body"><div class="t">Запускать агента через sudo</div>
+      <div class="d">Нужно, если вход выполняется не под root.</div></div></label>`, [
+    { text: "Отмена", cls: "btn" },
+    {
+      text: "Добавить", cls: "btn primary", keep: true, act: async () => {
+        try {
+          await go().AddServer({
+            name: $("sv-name").value.trim(), host: $("sv-host").value.trim(),
+            alias: $("sv-alias").value.trim(), port: +$("sv-port").value,
+            user: $("sv-user").value.trim(), key: $("sv-key").value.trim(),
+            repo_id: $("sv-repo").value, mode: "pull", sudo: $("sv-sudo").checked,
+          });
+          closeModal(); await reload();
+          state.sel = state.servers[state.servers.length - 1].id;
+          render();
+          checkAgent();
+        } catch (e) { fail(e); }
+      }
+    }]);
+}
+
+async function checkAgent() {
+  const s = cur(); if (!s) return;
+  try {
+    const v = await go().CheckServer(s.id);
+    log("info", s.name + ": " + v);
+    alertModal("Связь есть", `<p>На сервере установлен <span class="mono">${esc(v)}</span>.</p>
+      <p>Можно нажимать «Обследовать» - программа найдёт, что бэкапить.</p>`);
+  } catch (e) {
+    openModal("Агент не отвечает", `
+      <div class="note warn">${esc((e && e.message) || e)}</div>
+      <p>Скорее всего, агент ещё не установлен. Укажите файл
+        <span class="mono">autobak-agent</span>, собранный для Linux - программа зальёт его на сервер.</p>
+      ${isWindowApp() ? "" : `<label>Путь к файлу на машине с autobak
+        <input type="text" id="agent-path" placeholder="/opt/autobak/autobak-agent"></label>`}`, [
+      { text: "Позже", cls: "btn" },
+      {
+        text: isWindowApp() ? "Выбрать файл и установить" : "Установить", cls: "btn primary", keep: true, act: async () => {
+          try {
+            const f = isWindowApp()
+              ? await go().PickFile("Выберите autobak-agent для Linux")
+              : ($("agent-path") || {}).value.trim();
+            if (!f) return;
+            const v = await go().InstallAgent(cur().id, f);
+            closeModal();
+            const line = await go().AuthorizedKeyLine(cur().id, "ssh-ed25519 AAAA... ваш-ключ", true);
+            alertModal("Агент установлен", `<p><span class="mono">${esc(v)}</span></p>
+              <p>Теперь ограничьте ключ на сервере - добавьте в
+              <span class="mono">~/.ssh/authorized_keys</span> строку вида:</p>
+              <div class="recovery" style="border-color:var(--line);font-size:12px">${esc(line)}</div>
+              <p class="mut">Так ключ сможет только делать бэкапы. Восстановление им запрещено
+              намеренно: команда восстановления пишет произвольные файлы от root, то есть
+              ключ с её разрешением равносилен root. На время восстановления уберите
+              из строки <span class="mono">--backup-only</span>.</p>`);
+          } catch (e2) { fail(e2); }
+        }
+      }]);
+  }
+}
+
+/* ── Модальные окна ──────────────────────────────────────────────────── */
+let modalActions = [];
+
+function openModal(title, body, actions, cls) {
+  modalActions = actions || [{ text: "Закрыть", cls: "btn" }];
+  $("modal").className = "modal" + (cls ? " " + cls : "");
+  $("modal").innerHTML =
+    `<header>${esc(title)}</header><div class="body">${body}</div><footer id="modal-foot"></footer>`;
+  setFooter(modalActions);
+  $("modal-bg").classList.add("open");
+}
+
+function setFooter(actions) {
+  const f = $("modal-foot");
+  f.innerHTML = actions.map((a, i) => `<button class="${a.cls}" data-a="${i}">${esc(a.text)}</button>`).join("");
+  f.querySelectorAll("button").forEach(b => b.onclick = () => {
+    const a = actions[+b.dataset.a];
+    if (a.act) a.act();
+    if (!a.keep) closeModal();
+  });
+}
+
+function closeModal() { $("modal-bg").classList.remove("open"); }
+function alertModal(title, body) { openModal(title, body, [{ text: "Понятно", cls: "btn primary" }]); }
+
+function confirmName(kind, name, why) {
+  return new Promise(resolve => {
+    openModal("Подтвердите действие", `
+      <div class="note danger">${esc(why)}</div>
+      <label class="field"><span>Наберите имя ${esc(kind)}: <b>${esc(name)}</b></span>
+        <input type="text" id="confirm-input" autocomplete="off"></label>`, [
+      { text: "Отмена", cls: "btn", act: () => resolve(false) },
+      {
+        text: "Подтвердить", cls: "btn danger", keep: true, act: () => {
+          if ($("confirm-input").value.trim() !== name) return;
+          closeModal(); resolve(true);
+        }
+      }]);
+  });
+}
+
+$("modal-bg").onclick = (e) => { if (e.target === $("modal-bg")) closeModal(); };
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+/* ── Запуск ──────────────────────────────────────────────────────────── */
+$("add-server").onclick = modalServer;
+$("nav-repos").onclick = () => { state.tab = "repos"; state.sel = null; render(); };
+$("nav-notify").onclick = () => { state.tab = "notify"; state.sel = null; render(); };
+$("nav-about").onclick = () => { state.tab = "about"; state.sel = null; render(); };
+
+/* Обработчики событий ядра. Источник у них разный - мост окна или поток
+   от сервера, - но сами события одинаковые, поэтому разбор один. */
+const handlers = {
+  log: (l) => log(l.level, l.msg),
+  busy: setBusy,
+  progress: (p) => {
+    $("stage").textContent = p.stage || state.busy || "";
+    const c = [];
+    if (p.files) c.push(p.files.toLocaleString("ru") + " файлов");
+    if (p.bytes) c.push(fmtBytes(p.bytes));
+    $("counts").textContent = c.join(" · ");
+    if (p.bytes_total > 0) {
+      $("prog").classList.remove("indef");
+      $("prog").querySelector("i").style.width =
+        Math.min(100, (p.bytes / p.bytes_total) * 100) + "%";
+    }
+  },
+};
+
+/* В браузере события приходят потоком от сервера. Он же переживает
+   разрыв связи: браузер переподключается сам, а если сессия к тому
+   моменту истекла, страница уходит на вход, а не молча замирает без
+   обновлений. */
+function subscribeWeb() {
+  let src = null, gone = false;
+  const open = () => {
+    src = new EventSource("/api/events");
+    src.onmessage = (e) => {
+      let m;
+      try { m = JSON.parse(e.data); } catch (_) { return; }
+      const h = handlers[m.name];
+      if (h) h(m.data);
+    };
+    src.onerror = () => {
+      src.close();
+      if (gone) return;
+      // Проверяем, жива ли ещё сессия: без этого страница бесконечно
+      // стучится в закрытую дверь и выглядит просто зависшей.
+      fetch("/api/events", { method: "HEAD", credentials: "same-origin" })
+        .then((r) => { if (r.status === 401) { gone = true; location.href = "/login"; return; } setTimeout(open, 2000); })
+        .catch(() => setTimeout(open, 2000));
+    };
+  };
+  open();
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  if (!isWindowApp()) {
+    document.body.classList.add("web");
+    const lo = $("logout-btn");
+    if (lo) lo.onclick = () => {
+      fetch("/logout", { method: "POST", headers: { "X-Autobak": "1" }, credentials: "same-origin" })
+        .finally(() => { location.href = "/login"; });
+    };
+  }
+  if (isWindowApp() && window.runtime) {
+    for (const [name, fn] of Object.entries(handlers)) window.runtime.EventsOn(name, fn);
+  } else if (!isWindowApp()) {
+    subscribeWeb();
+  }
+  reload().catch(e => log("error", String(e)));
+});
+</script>
+</body>
+</html>

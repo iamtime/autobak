@@ -1,0 +1,14 @@
+# Контекст сборки образа с веб-интерфейсом - весь репозиторий, поэтому
+# всё лишнее отсекаем здесь: каждый мегабайт контекста пересылается
+# демону Docker при каждой сборке.
+.git
+dist/
+vendor/
+docs/
+test/
+*.exe
+*.log
+deploy/docker/autobak-agent-linux-*
+test/docker/autobak-agent
+test/docker/integration.test
+.env
