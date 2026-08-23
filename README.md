@@ -110,6 +110,7 @@ deploy\autobak-task.cmd install
 
 ## Что дальше
 
+- Пошаговая установка Windows + Linux-сервер — [QUICKSTART.md](QUICKSTART.md)
 - Полное устройство, все команды и режимы — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Сборка под конкретную ОС, автозапуск, push-режим, Kubernetes, git-история
   конфигов, второе хранилище — там же.

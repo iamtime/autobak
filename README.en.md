@@ -109,6 +109,7 @@ The web container runs the schedule itself.
 
 ## More
 
+- Step-by-step setup for Windows + a Linux server — [QUICKSTART.md](QUICKSTART.md) (in Russian)
 - Full design, every command and mode — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Per-OS builds, autostart, push mode, Kubernetes, git config history,
   a second repository — all there.
