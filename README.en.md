@@ -14,7 +14,25 @@ after editing 1 file out of 12  38 bytes over the wire
 
 ## Install
 
-Go 1.26 required.
+Go 1.26 required. If you don't have it yet:
+
+```powershell
+# Windows
+winget install GoLang.Go        # or: choco install golang
+```
+
+```sh
+# macOS
+brew install go
+
+# Debian / Ubuntu
+sudo apt install golang-go       # if the repo ships older than 1.26, grab it from go.dev/dl
+
+# Fedora / RHEL
+sudo dnf install golang
+```
+
+Then build:
 
 ```sh
 git clone https://github.com/iamtime/autobak && cd autobak

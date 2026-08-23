@@ -14,7 +14,25 @@
 
 ## Установка
 
-Нужен Go 1.26.
+Нужен Go 1.26. Если ещё не стоит:
+
+```powershell
+# Windows
+winget install GoLang.Go        # или: choco install golang
+```
+
+```sh
+# macOS
+brew install go
+
+# Debian / Ubuntu
+sudo apt install golang-go       # если в репозитории версия старее 1.26 — с go.dev/dl
+
+# Fedora / RHEL
+sudo dnf install golang
+```
+
+Дальше сборка:
 
 ```sh
 git clone https://github.com/iamtime/autobak && cd autobak
