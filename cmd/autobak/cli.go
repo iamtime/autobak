@@ -25,6 +25,29 @@ func tw() *tabwriter.Writer {
 	return tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 }
 
+// hoistFlags переносит ведущие позиционные аргументы в конец, чтобы флаги
+// парсились независимо от порядка.
+//
+// Стандартный flag в Go останавливается на первом же аргументе без "-",
+// поэтому «server install prod --binary agent» оставлял бы --binary
+// неразобранным. А именно такой порядок (сначала имя сервера, потом флаги)
+// естественнее всего и записан в документации. Собираем токены до первого
+// флага - это заведомо позиционные аргументы, не значения флагов, - и
+// ставим их после флагов; их взаимный порядок сохраняется.
+func hoistFlags(args []string) []string {
+	i := 0
+	for i < len(args) && !strings.HasPrefix(args[i], "-") {
+		i++
+	}
+	if i == 0 || i == len(args) {
+		return args // нечего переносить: либо начинается с флага, либо флагов нет
+	}
+	out := make([]string, 0, len(args))
+	out = append(out, args[i:]...) // флаги и их значения
+	out = append(out, args[:i]...) // ведущие позиционные - в конец
+	return out
+}
+
 // events выводит ход длинной операции одной перерисовываемой строкой,
 // чтобы терминал не заполнялся сотней тысяч имён файлов.
 func events() app.Events {
@@ -119,7 +142,7 @@ func repoAdd(ctx context.Context, a *app.App, args []string) error {
 	prefix := fs.String("prefix", "", "подкаталог в бакете")
 	access := fs.String("access-key", "", "ключ доступа S3")
 	pathStyle := fs.Bool("path-style", true, "адресация вида endpoint/bucket/key")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return err
 	}
 	if *name == "" {
@@ -220,7 +243,7 @@ func serverAdd(a *app.App, args []string) error {
 	repoName := fs.String("repo", "", "хранилище")
 	mode := fs.String("mode", "pull", "pull или push")
 	sudo := fs.Bool("sudo", false, "запускать агента через sudo")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return err
 	}
 	if *name == "" || (*host == "" && *alias == "") {
@@ -251,7 +274,7 @@ func serverAdd(a *app.App, args []string) error {
 func serverInstall(ctx context.Context, a *app.App, args []string) error {
 	fs := flag.NewFlagSet("server install", flag.ContinueOnError)
 	binary := fs.String("binary", "", "путь к собранному autobak-agent")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return err
 	}
 	if fs.NArg() == 0 {
@@ -300,7 +323,7 @@ func serverInstall(ctx context.Context, a *app.App, args []string) error {
 func serverDiscover(ctx context.Context, a *app.App, args []string) error {
 	fs := flag.NewFlagSet("server discover", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "вывести полный отчёт в JSON")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return err
 	}
 	if fs.NArg() == 0 {
@@ -358,7 +381,7 @@ func printReport(rep *discover.Report) {
 func serverPlan(ctx context.Context, a *app.App, args []string) error {
 	fs := flag.NewFlagSet("server plan", flag.ContinueOnError)
 	apply := fs.Bool("apply", false, "сохранить составленный план")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return err
 	}
 	if fs.NArg() == 0 {
@@ -373,6 +396,9 @@ func serverPlan(ctx context.Context, a *app.App, args []string) error {
 		return err
 	}
 	p := discover.Suggest(rep)
+	// Сохраняем ручные правки прошлого плана (исключения, выбор баз,
+	// снятые галочки) при пересборке.
+	p.CarryOver(s.Plan)
 
 	w := tw()
 	fmt.Fprintln(w, "ВКЛ\tТИП\tЧТО\tПОДРОБНОСТИ")
@@ -476,7 +502,7 @@ func cmdRestore(ctx context.Context, args []string) error {
 	dbMode := fs.String("db", "file", "дампы баз: skip|file|restore")
 	dbInPlace := fs.Bool("db-in-place", false, "залить базы поверх боевых")
 	apply := fs.Bool("apply", false, "выполнить (без этого - только сухой прогон)")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return err
 	}
 	if fs.NArg() < 2 {
@@ -547,7 +573,7 @@ func cmdRestore(ctx context.Context, args []string) error {
 func cmdPrune(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("prune", flag.ContinueOnError)
 	apply := fs.Bool("apply", false, "выполнить удаление")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return err
 	}
 	if fs.NArg() == 0 {
@@ -590,7 +616,7 @@ func cmdPrune(ctx context.Context, args []string) error {
 func cmdVerify(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("verify", flag.ContinueOnError)
 	sample := fs.Float64("sample", 0.05, "доля читаемых чанков (1 - полная проверка)")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return err
 	}
 	if fs.NArg() == 0 {

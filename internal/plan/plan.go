@@ -189,6 +189,41 @@ func HestiaPaths() []string {
 	}
 }
 
+// CarryOver переносит ручные настройки из старого плана в свежесобранный.
+//
+// Пересборка плана по обследованию не должна затирать то, что человек
+// настроил руками: снятые галочки модулей, исключения (например storage),
+// выбор конкретных баз. Совпадение по типу и имени модуля; новые модули
+// (появившийся сайт) приходят с настройками по умолчанию, исчезнувшие -
+// просто пропадают.
+func (p *Plan) CarryOver(old Plan) {
+	type key struct {
+		kind Kind
+		name string
+	}
+	prev := map[key]Module{}
+	for _, m := range old.Modules {
+		prev[key{m.Kind, m.Name}] = m
+	}
+	for i := range p.Modules {
+		o, ok := prev[key{p.Modules[i].Kind, p.Modules[i].Name}]
+		if !ok {
+			continue
+		}
+		p.Modules[i].Enabled = o.Enabled
+		if len(o.Excludes) > 0 {
+			p.Modules[i].Excludes = o.Excludes
+		}
+		if len(o.Databases) > 0 {
+			p.Modules[i].Databases = o.Databases
+		}
+	}
+	// Глобальные исключения плана тоже сохраняем, если их меняли.
+	if len(old.Excludes) > 0 {
+		p.Excludes = old.Excludes
+	}
+}
+
 func (p *Plan) Enabled() []Module {
 	var out []Module
 	for _, m := range p.Modules {

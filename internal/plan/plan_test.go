@@ -159,3 +159,44 @@ func TestAllowForPlan(t *testing.T) {
 		t.Fatalf("Args() = %v, ожидалось --allow= и --allow-db", args)
 	}
 }
+
+// Пересборка плана не должна стирать ручные правки: исключения, выбор баз,
+// снятые галочки. Регрессия на жалобу пользователя (сбивался storage).
+func TestCarryOver(t *testing.T) {
+	old := Plan{Modules: []Module{
+		{Kind: KindFiles, Name: "v3.uz", Enabled: true, Paths: []string{"/home/web/v3.uz"},
+			Excludes: []string{"storage", "*.log"}},
+		{Kind: KindFiles, Name: "old-site", Enabled: false, Paths: []string{"/home/web/old"}},
+		{Kind: KindMySQL, Name: "MySQL", Enabled: true, Databases: []string{"keepme"}},
+	}}
+
+	// Свежий план из обследования: у сайтов исключений нет, MySQL со всеми
+	// базами, плюс появился новый сайт.
+	fresh := &Plan{Modules: []Module{
+		{Kind: KindFiles, Name: "v3.uz", Enabled: true, Paths: []string{"/home/web/v3.uz"}},
+		{Kind: KindFiles, Name: "new-site", Enabled: true, Paths: []string{"/home/web/new"}},
+		{Kind: KindMySQL, Name: "MySQL", Enabled: true, Databases: []string{"keepme", "other", "third"}},
+	}}
+	fresh.CarryOver(old)
+
+	m := map[string]Module{}
+	for _, x := range fresh.Modules {
+		m[x.Name] = x
+	}
+	// Исключения v3.uz сохранились.
+	if got := m["v3.uz"].Excludes; len(got) != 2 || got[0] != "storage" {
+		t.Fatalf("исключения v3.uz потеряны при пересборке: %v", got)
+	}
+	// Выбор баз сохранился (одна, а не все три).
+	if got := m["MySQL"].Databases; len(got) != 1 || got[0] != "keepme" {
+		t.Fatalf("выбор баз MySQL сброшен: %v", got)
+	}
+	// Новый сайт пришёл включённым, без исключений.
+	if !m["new-site"].Enabled || len(m["new-site"].Excludes) != 0 {
+		t.Fatalf("новый сайт настроен неверно: %+v", m["new-site"])
+	}
+	// Исчезнувший old-site просто пропал.
+	if _, ok := m["old-site"]; ok {
+		t.Fatal("исчезнувший сайт остался в плане")
+	}
+}

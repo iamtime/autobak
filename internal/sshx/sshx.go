@@ -185,12 +185,20 @@ type Result struct {
 // RunAgent выполняет команду агента и возвращает её вывод целиком.
 // Для потоковых операций (export/import) используйте Agent напрямую.
 func (t Target) RunAgent(ctx context.Context, timeout time.Duration, args ...string) (*Result, error) {
+	return t.RunAgentInput(ctx, timeout, nil, args...)
+}
+
+// RunAgentInput - то же, но с данными на stdin (например, план для estimate).
+func (t Target) RunAgentInput(ctx context.Context, timeout time.Duration, stdin io.Reader, args ...string) (*Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	cmd, err := t.Agent(ctx, args...)
 	if err != nil {
 		return nil, err
+	}
+	if stdin != nil {
+		cmd.Stdin = stdin
 	}
 	var out, errBuf bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errBuf

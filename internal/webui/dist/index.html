@@ -164,6 +164,10 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 .check .body { flex: 1; min-width: 0; }
 .check .body .t { font-weight: 500; }
 .check .body .d { font-size: 12px; color: var(--muted); word-break: break-all; }
+.mod-edit { margin-top: 8px; }
+.mod-edit label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+.mod-edit input { margin-top: 3px; }
+.mod-edit code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: 11px; }
 .mut { color: var(--muted); }
 .empty { text-align: center; color: var(--muted); padding: 40px 20px; }
 .empty h3 { font-weight: 600; margin: 0 0 6px; color: var(--text); }
@@ -211,6 +215,14 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
   box-shadow: 0 20px 60px rgba(0,0,0,.4);
 }
 .modal.wide { width: min(760px, 94vw); }
+/* Крупное окно с возможностью тянуть за нижний-правый угол: длинные списки
+   (обследование сервера) удобнее смотреть большим, а не через скролл. */
+.modal.big {
+  width: min(1040px, 95vw); height: min(840px, 88vh);
+  min-width: 480px; min-height: 340px; max-width: 98vw; max-height: 95vh;
+  resize: both; overflow: hidden;
+}
+.modal.big .body { flex: 1 1 auto; }
 .modal header { padding: 15px 18px 10px; font-size: 15px; font-weight: 600; }
 .modal .body { padding: 0 18px 4px; overflow-y: auto; }
 .modal footer {
@@ -441,8 +453,8 @@ function renderOverview(s) {
       </div>
     </div>
     <div class="card">
-      <h2>Что бэкапится <span class="hint">${s.modules.filter(m => m.enabled).length} из ${s.modules.length} модулей</span></h2>
-      ${s.modules.length ? s.modules.filter(m => m.enabled).map(m => `
+      <h2>Что бэкапится <span class="hint">${(s.modules || []).filter(m => m.enabled).length} из ${(s.modules || []).length} модулей</span></h2>
+      ${(s.modules || []).length ? s.modules.filter(m => m.enabled).map(m => `
         <div class="check"><input type="checkbox" checked disabled>
           <div class="body"><div class="t">${esc(m.title)}: ${esc(m.name)}</div>
           <div class="d">${esc(m.detail)}</div></div></div>`).join("")
@@ -489,26 +501,87 @@ function renderPlan(s) {
     <div class="card">
       <h2>Модули бэкапа
         <span class="hint">снимите галочку, чтобы исключить</span></h2>
-      ${s.modules.length ? s.modules.map((m, i) => `
+      ${(s.modules || []).length ? s.modules.map((m, i) => `
         <div class="check">
           <input type="checkbox" data-i="${i}" ${m.enabled ? "checked" : ""}>
           <div class="body">
             <div class="t">${esc(m.title)}: ${esc(m.name)}</div>
             <div class="d">${esc(m.detail)}</div>
+            ${moduleEditor(m, i)}
           </div>
         </div>`).join("")
       : `<div class="empty"><h3>План пуст</h3>
          <p>Нажмите «Обследовать сервер» - AutoBak составит план по тому, что реально нашёл.</p></div>`}
       <div class="row" style="margin-top:12px">
+        <button class="btn" id="estimate" ${state.busy ? "disabled" : ""}>Оценить размер</button>
         <button class="btn primary" id="resuggest" ${state.busy ? "disabled" : ""}>Обследовать и пересобрать план</button>
       </div>
+      <div id="est-result" class="mut" style="margin-top:10px;font-size:13px"></div>
     </div>`;
   document.querySelectorAll("#view input[type=checkbox]").forEach(el =>
     el.onchange = async () => {
       try { await go().ToggleModule(s.id, +el.dataset.i, el.checked); await reload(); }
       catch (e) { fail(e); el.checked = !el.checked; }
     });
+  // Сохранение исключений (файловые модули).
+  document.querySelectorAll("[data-save-ex]").forEach(btn => btn.onclick = async () => {
+    const i = +btn.dataset.saveEx;
+    const list = $("ex-" + i).value.split(",").map(x => x.trim()).filter(Boolean);
+    try { await go().SetModuleExcludes(s.id, i, list); await reload(); state.tab = "plan"; render();
+      log("info", "исключения сохранены"); }
+    catch (e) { fail(e); }
+  });
+  // Сохранение списка баз (модули mysql/postgres).
+  document.querySelectorAll("[data-save-db]").forEach(btn => btn.onclick = async () => {
+    const i = +btn.dataset.saveDb;
+    const list = $("db-" + i).value.split(",").map(x => x.trim()).filter(Boolean);
+    try { await go().SetModuleDatabases(s.id, i, list); await reload(); state.tab = "plan"; render();
+      log("info", "список баз сохранён"); }
+    catch (e) { fail(e); }
+  });
   $("resuggest").onclick = () => doDiscover(true);
+  $("estimate").onclick = async () => {
+    const box = $("est-result");
+    box.textContent = "Считаю размер на сервере (только метаданные, без чтения файлов)…";
+    try {
+      const e = await go().EstimateBackup(s.id);
+      // В хранилище ляжет меньше прочитанного за счёт сжатия и дедупликации.
+      // Коэффициент берём из прошлого бэкапа, если он был, иначе грубо 30-60%.
+      let stored;
+      if (e.last_stored > 0) {
+        stored = `около <b>${fmtBytes(e.last_stored)}</b> (как в прошлый раз)`;
+      } else if (e.bytes > 0) {
+        stored = `примерно <b>${fmtBytes(e.bytes * 0.3)}–${fmtBytes(e.bytes * 0.6)}</b>`;
+      } else {
+        stored = "почти ничего";
+      }
+      let html = `Прочитать: <b>${fmtBytes(e.bytes)}</b> (${e.files.toLocaleString("ru")} файлов` +
+        `${e.files ? "" : " — только базы/тома"}). Место в хранилище: ${stored}.`;
+      if (e.partial) html += `<br>Не учтены: ${esc((e.skipped || []).join(", "))} — ` +
+        `размер дампа баз и манифестов заранее не посчитать (обычно немного).`;
+      box.innerHTML = html;
+    } catch (err) { box.textContent = ""; fail(err); }
+  };
+}
+
+// moduleEditor рисует поле настройки под модулем: исключения для файловых
+// модулей, список баз - для mysql/postgres. У остальных настраивать нечего.
+function moduleEditor(m, i) {
+  if (m.kind === "files" || m.kind === "configs" || m.kind === "hestia") {
+    return `<div class="mod-edit">
+      <label>Исключить из этого бэкапа <span class="mut">(маски через запятую, напр. <code>**/storage, *.log, cache</code>)</span>
+        <input type="text" id="ex-${i}" value="${esc((m.excludes || []).join(", "))}" placeholder="ничего не исключать"></label>
+      <button class="btn sm" data-save-ex="${i}">Сохранить исключения</button>
+    </div>`;
+  }
+  if (m.kind === "mysql" || m.kind === "postgres") {
+    return `<div class="mod-edit">
+      <label>Какие базы бэкапить <span class="mut">(через запятую; пусто = все)</span>
+        <input type="text" id="db-${i}" value="${esc((m.databases || []).join(", "))}" placeholder="все базы"></label>
+      <button class="btn sm" data-save-db="${i}">Сохранить список баз</button>
+    </div>`;
+  }
+  return "";
 }
 
 async function loadSnaps() {
@@ -973,7 +1046,10 @@ async function doDiscover(applyPlan) {
 
     openModal("Что нашлось на сервере", body + `
       <div class="note">Первый бэкап передаст примерно <b>${fmtBytes(estimate(rep))}</b>.
-      Дальнейшие будут в десятки раз меньше.</div>`, [
+      Дальнейшие будут в десятки раз меньше.</div>
+      <div class="mut" style="font-size:12px;margin-top:6px">Размеры показаны с диска,
+      без учёта исключений плана. Исключённые папки (например storage) в бэкап не
+      попадут, хотя здесь ещё учтены в размере.</div>`, [
       { text: "Закрыть", cls: "btn" },
       {
         text: "Составить план по найденному", cls: "btn primary", keep: true, act: async () => {
@@ -984,7 +1060,7 @@ async function doDiscover(applyPlan) {
             log("info", "план составлен по результатам обследования");
           } catch (e) { fail(e); }
         }
-      }]);
+      }], "big");
   } catch (e) { fail(e); }
 }
 
@@ -1362,6 +1438,11 @@ let modalActions = [];
 
 function openModal(title, body, actions, cls) {
   modalActions = actions || [{ text: "Закрыть", cls: "btn" }];
+  // Сброс размера от предыдущего окна: resize пишет ширину/высоту прямо в
+  // style, а элемент один на все окна - иначе растянутое окно обследования
+  // «прилипло» бы к следующему маленькому подтверждению.
+  $("modal").style.width = "";
+  $("modal").style.height = "";
   $("modal").className = "modal" + (cls ? " " + cls : "");
   $("modal").innerHTML =
     `<header>${esc(title)}</header><div class="body">${body}</div><footer id="modal-foot"></footer>`;

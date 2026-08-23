@@ -177,6 +177,11 @@ type ModuleView struct {
 	Name    string `json:"name"`
 	Enabled bool   `json:"enabled"`
 	Detail  string `json:"detail"`
+	// Поля для редактирования плана прямо в интерфейсе. Пустые не мешают:
+	// у модуля баз нет путей, у файлового - баз.
+	Paths     []string `json:"paths,omitempty"`
+	Excludes  []string `json:"excludes,omitempty"`
+	Databases []string `json:"databases,omitempty"`
 }
 
 type RepoView struct {
@@ -274,6 +279,11 @@ func (u *API) buildState(cfg *app.Config, hasTG, hasMail bool, due map[string]bo
 			v.LastTime = s.Last.Time.Local().Format("02.01.2006 15:04")
 			v.LastBytes = repo.HumanBytes(s.Last.Bytes)
 		}
+		// Пустой, но не nil: в JSON уйдёт [], а не null, иначе интерфейс
+		// у только что добавленного сервера (плана ещё нет) падал бы на
+		// modules.filter(...). Клиент всё равно защищён, но честнее не
+		// отдавать null там, где по смыслу список.
+		v.Modules = make([]ModuleView, 0, len(s.Plan.Modules))
 		for _, m := range s.Plan.Modules {
 			v.Modules = append(v.Modules, moduleView(m))
 		}
@@ -296,6 +306,7 @@ func moduleView(m plan.Module) ModuleView {
 	return ModuleView{
 		Kind: string(m.Kind), Title: m.Kind.Title(), Name: m.Name,
 		Enabled: m.Enabled, Detail: detail,
+		Paths: m.Paths, Excludes: m.Excludes, Databases: m.Databases,
 	}
 }
 
@@ -430,11 +441,19 @@ func (u *API) Discover(id string) (*discover.Report, error) {
 
 // SuggestPlan обследует сервер и предлагает план, ничего не сохраняя.
 func (u *API) SuggestPlan(id string) (*plan.Plan, error) {
+	s, err := u.a.Config().Server(id)
+	if err != nil {
+		return nil, err
+	}
 	rep, err := u.Discover(id)
 	if err != nil {
 		return nil, err
 	}
-	return discover.Suggest(rep), nil
+	p := discover.Suggest(rep)
+	// Переносим ручные правки: пересборка не должна стирать исключения и
+	// выбор баз, настроенные человеком.
+	p.CarryOver(s.Plan)
+	return p, nil
 }
 
 func (u *API) SavePlan(id string, p plan.Plan) error {
@@ -446,6 +465,16 @@ func (u *API) SavePlan(id string, p plan.Plan) error {
 		return err
 	}
 	return u.a.Update(func(*app.Config) error { s.Plan = p; return nil })
+}
+
+// EstimateBackup оценивает объём бэкапа по текущему плану, до запуска.
+func (u *API) EstimateBackup(id string) (*app.Estimate, error) {
+	ctx, done, err := u.begin("оценка размера")
+	if err != nil {
+		return nil, err
+	}
+	defer done()
+	return u.a.EstimateBackup(ctx, id)
 }
 
 // ToggleModule включает или выключает один модуль плана.
@@ -461,6 +490,54 @@ func (u *API) ToggleModule(serverID string, index int, enabled bool) error {
 		s.Plan.Modules[index].Enabled = enabled
 		return nil
 	})
+}
+
+// SetModuleExcludes задаёт маски исключения для файлового модуля.
+//
+// Например «**/storage» уберёт из бэкапа этого сайта папку storage на любой
+// глубине, не трогая остальное. Маски применяются только к этому модулю.
+func (u *API) SetModuleExcludes(serverID string, index int, excludes []string) error {
+	s, err := u.a.Config().Server(serverID)
+	if err != nil {
+		return err
+	}
+	if index < 0 || index >= len(s.Plan.Modules) {
+		return errors.New("модуль не найден")
+	}
+	return u.a.Update(func(*app.Config) error {
+		s.Plan.Modules[index].Excludes = cleanList(excludes)
+		return nil
+	})
+}
+
+// SetModuleDatabases задаёт список баз для модуля mysql/postgres.
+//
+// Пустой список означает «все базы, кроме служебных». Так можно оставить в
+// бэкапе только нужные базы, не весь сервер.
+func (u *API) SetModuleDatabases(serverID string, index int, databases []string) error {
+	s, err := u.a.Config().Server(serverID)
+	if err != nil {
+		return err
+	}
+	if index < 0 || index >= len(s.Plan.Modules) {
+		return errors.New("модуль не найден")
+	}
+	return u.a.Update(func(*app.Config) error {
+		s.Plan.Modules[index].Databases = cleanList(databases)
+		return nil
+	})
+}
+
+// cleanList убирает пустые строки и лишние пробелы из списка, введённого
+// человеком через запятую.
+func cleanList(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func (u *API) SaveSchedule(id string, sched app.Schedule, ret repo.Retention, mode string) error {

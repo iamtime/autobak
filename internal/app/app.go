@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -281,6 +282,41 @@ func (a *App) Discover(ctx context.Context, serverID string) (*discover.Report, 
 	return &rep, nil
 }
 
+// Estimate - предварительная оценка объёма бэкапа.
+type Estimate struct {
+	Bytes   int64    `json:"bytes"`
+	Files   int64    `json:"files"`
+	Partial bool     `json:"partial"`
+	Skipped []string `json:"skipped,omitempty"`
+	// LastStored - сколько занял прошлый успешный бэкап этого сервера в
+	// хранилище (0 - бэкапов ещё не было). Лучший ориентир по месту:
+	// оценка выше - это «сколько читать», а реально на диск ляжет меньше.
+	LastStored int64 `json:"last_stored"`
+}
+
+// EstimateBackup спрашивает у сервера, сколько данных уйдёт в бэкап по
+// текущему плану, с учётом исключений. Обход только по метаданным - быстро.
+func (a *App) EstimateBackup(ctx context.Context, serverID string) (*Estimate, error) {
+	s, err := a.cfg.Server(serverID)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(s.Plan)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.SSH.RunAgentInput(ctx, 5*time.Minute, bytes.NewReader(raw), "estimate")
+	if err != nil {
+		return nil, err
+	}
+	var est Estimate
+	if err := json.Unmarshal([]byte(res.Stdout), &est); err != nil {
+		return nil, fmt.Errorf("autobak: агент вернул неожиданный ответ: %w", err)
+	}
+	est.LastStored = s.Last.GoodStored
+	return &est, nil
+}
+
 // Events - то, что интерфейс показывает во время длинной операции.
 type Events struct {
 	Progress func(proto.Progress)
@@ -313,6 +349,7 @@ func (a *App) Backup(ctx context.Context, serverID string, ev Events) (*repo.Sna
 	last.GoodTime = s.Last.GoodTime
 	last.GoodSnapshotID = s.Last.GoodSnapshotID
 	last.GoodBytes = s.Last.GoodBytes
+	last.GoodStored = s.Last.GoodStored
 	if err != nil {
 		last.Error = err.Error()
 		_ = a.Update(func(*Config) error { s.Last = last; return nil })
@@ -331,6 +368,7 @@ func (a *App) Backup(ctx context.Context, serverID string, ev Events) (*repo.Sna
 	last.GoodTime = start
 	last.GoodSnapshotID = snap.ID
 	last.GoodBytes = snap.Stats.BytesTotal
+	last.GoodStored = snap.Stats.BytesStored
 	if err := a.Update(func(*Config) error { s.Last = last; return nil }); err != nil {
 		return snap, err
 	}

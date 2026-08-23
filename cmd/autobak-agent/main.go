@@ -18,12 +18,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"slices"
 	"strings"
 	"syscall"
 
+	"github.com/iamtime/autobak/internal/collect"
 	"github.com/iamtime/autobak/internal/discover"
 	"github.com/iamtime/autobak/internal/engine"
 	"github.com/iamtime/autobak/internal/plan"
@@ -46,7 +48,7 @@ var serveAllow *plan.Allow
 //
 // Белый список, а не чёрный: любая новая подкоманда по умолчанию
 // недоступна снаружи, пока её сюда сознательно не добавят.
-var allowedCommands = []string{"discover", "export", "import", "backup", "version", "selftest"}
+var allowedCommands = []string{"discover", "export", "import", "backup", "version", "selftest", "estimate"}
 
 // backupOnlyCommands - то же без import.
 //
@@ -60,7 +62,7 @@ var allowedCommands = []string{"discover", "export", "import", "backup", "versio
 // тогда требует руками разрешить import на время операции - и это
 // правильное трение: восстановление поверх боевого сервера не должно
 // быть чем-то, что случается само.
-var backupOnlyCommands = []string{"discover", "export", "backup", "version", "selftest"}
+var backupOnlyCommands = []string{"discover", "export", "backup", "version", "selftest", "estimate"}
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -96,6 +98,8 @@ func run(ctx context.Context, args []string) error {
 		return cmdImport(ctx, args[1:])
 	case "backup":
 		return cmdBackup(ctx, args[1:])
+	case "estimate":
+		return cmdEstimate(ctx, args[1:])
 	case "selftest":
 		return cmdSelftest(ctx)
 	case "version", "--version", "-v":
@@ -193,6 +197,39 @@ func cmdDiscover(ctx context.Context, args []string) error {
 //
 // Вариант с --plan оставлен для отладки руками: файл с планом, весь поток
 // целиком, без обратного канала.
+// cmdEstimate быстро оценивает объём бэкапа по плану, не читая содержимое.
+//
+// План приходит JSON-ом на stdin. Ответ - JSON с числом байт и файлов.
+// Нужен интерфейсу, чтобы показать «сколько примерно места» до запуска.
+func cmdEstimate(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("estimate", flag.ContinueOnError)
+	planFile := fs.String("plan", "", "файл с планом (по умолчанию читается из stdin)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	var raw []byte
+	var err error
+	if *planFile != "" {
+		raw, err = os.ReadFile(*planFile)
+	} else {
+		raw, err = io.ReadAll(io.LimitReader(os.Stdin, 8<<20))
+	}
+	if err != nil {
+		return fmt.Errorf("autobak: не прочитать план: %w", err)
+	}
+	var p plan.Plan
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return fmt.Errorf("autobak: план повреждён: %w", err)
+	}
+	// То же серверное ограничение, что и у export: оценка тоже обходит
+	// каталоги, и украденный ключ не должен считать размер /etc/shadow.
+	if err := p.CheckAllowed(serveAllow); err != nil {
+		return err
+	}
+	est := collect.EstimatePlan(ctx, &p)
+	return json.NewEncoder(os.Stdout).Encode(est)
+}
+
 func cmdExport(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("export", flag.ContinueOnError)
 	planFile := fs.String("plan", "", "файл с планом (для отладки; без него запрос читается кадром из stdin)")

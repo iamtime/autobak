@@ -120,9 +120,17 @@ func (c *dockerCollector) Collect(ctx context.Context, s Sink) (map[string]any, 
 // внутри тома добавит к репозиторию килобайты, тогда как перепакованный
 // tar изменился бы целиком и стоил бы как полная копия тома.
 func (c *dockerCollector) dumpVolume(ctx context.Context, s Sink, name string) error {
-	src := path.Join(dockerVolumeRoot, name, "_data")
+	// Реальный путь спрашиваем у самого движка, а не угадываем: у podman
+	// (podman-docker), у rootless-docker и при нестандартном data-root тома
+	// лежат не в /var/lib/docker/volumes. Mountpoint из inspect верен всегда.
+	src := c.volumeMountpoint(ctx, name)
+	if src == "" {
+		src = path.Join(dockerVolumeRoot, name, "_data") // запасной вариант
+	}
 	if _, err := os.Stat(src); err != nil {
-		return fmt.Errorf("том недоступен по пути %s: %w (нестандартный драйвер или rootless docker)", src, err)
+		return fmt.Errorf("том недоступен по пути %s: %w "+
+			"(проверьте, что агент видит каталог томов движка; для rootless podman/docker "+
+			"он в домашнем каталоге пользователя, а не в /var/lib)", src, err)
 	}
 	sub := plan.Module{
 		Kind:          plan.KindFiles,
@@ -136,6 +144,20 @@ func (c *dockerCollector) dumpVolume(ctx context.Context, s Sink, name string) e
 	fc.prefix = path.Join(VirtualDocker, "volumes", name)
 	_, err := fc.Collect(ctx, s)
 	return err
+}
+
+// volumeMountpoint спрашивает у движка, где физически лежат данные тома.
+// Пусто, если движок недоступен или не сообщил путь - тогда используется
+// запасной путь по умолчанию.
+func (c *dockerCollector) volumeMountpoint(ctx context.Context, name string) string {
+	if strings.HasPrefix(name, "-") {
+		return "" // имя-как-флаг не отдаём в inspect
+	}
+	out, err := runCapture(ctx, "docker", "volume", "inspect", "--format", "{{.Mountpoint}}", name)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func (c *dockerCollector) loadContainers(ctx context.Context, s Sink) error {

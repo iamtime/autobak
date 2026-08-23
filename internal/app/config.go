@@ -197,6 +197,9 @@ type LastRun struct {
 	GoodTime       time.Time `json:"good_time,omitempty"`
 	GoodSnapshotID string    `json:"good_snapshot_id,omitempty"`
 	GoodBytes      int64     `json:"good_bytes,omitempty"`
+	// GoodStored - сколько прошлый успешный бэкап занял в хранилище (после
+	// сжатия и дедупликации). Именно это число - ответ на «сколько места».
+	GoodStored int64 `json:"good_stored,omitempty"`
 }
 
 func (l LastRun) Status() string {

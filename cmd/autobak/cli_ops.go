@@ -20,7 +20,7 @@ func cmdMirror(ctx context.Context, args []string) error {
 	apply := fs.Bool("apply", false, "выполнить копирование (без этого - сухой прогон)")
 	prune := fs.Bool("prune", false, "удалить из зеркала то, чего больше нет в источнике")
 	verify := fs.Bool("verify", false, "прочитать зеркало целиком и проверить подписи")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return err
 	}
 	if fs.NArg() < 2 {
@@ -66,7 +66,7 @@ func cmdDrill(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("drill", flag.ContinueOnError)
 	maxMB := fs.Int64("max-mb", 1024, "сколько мегабайт восстанавливать для проверки (0 - весь снимок)")
 	dir := fs.String("dir", "", "куда восстанавливать (пусто - во временный каталог, который удалится)")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return err
 	}
 	if fs.NArg() == 0 {
@@ -110,7 +110,7 @@ func cmdDeploy(ctx context.Context, args []string) error {
 	only := fs.String("only", "", "что именно: configs,sites,databases,docker")
 	force := fs.Bool("force", false, "разрешить развёртывание на непустой сервер")
 	apply := fs.Bool("apply", false, "выполнить (без этого - сухой прогон)")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return err
 	}
 	if fs.NArg() == 0 {
@@ -218,7 +218,7 @@ func printDeploy(rep *app.DeployReport) {
 func cmdAgentConfig(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("agent-config", flag.ContinueOnError)
 	out := fs.String("dir", "", "куда сложить файлы (по умолчанию - в каталог настроек)")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(hoistFlags(args)); err != nil {
 		return err
 	}
 	if fs.NArg() == 0 {
