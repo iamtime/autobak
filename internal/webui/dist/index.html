@@ -556,8 +556,8 @@ function renderPlan(s) {
         stored = "почти ничего";
       }
       let html = `Прочитать: <b>${fmtBytes(e.bytes)}</b> (${e.files.toLocaleString("ru")} файлов` +
-        `${e.files ? "" : " — только базы/тома"}). Место в хранилище: ${stored}.`;
-      if (e.partial) html += `<br>Не учтены: ${esc((e.skipped || []).join(", "))} — ` +
+        `${e.files ? "" : " - только базы/тома"}). Место в хранилище: ${stored}.`;
+      if (e.partial) html += `<br>Не учтены: ${esc((e.skipped || []).join(", "))} - ` +
         `размер дампа баз и манифестов заранее не посчитать (обычно немного).`;
       box.innerHTML = html;
     } catch (err) { box.textContent = ""; fail(err); }
@@ -1357,7 +1357,7 @@ function modalServer() {
       <input type="text" id="sv-name" placeholder="prod"></label>
     <div class="row">
       <label class="field" style="flex:2"><span>Адрес <span class="req">*</span></span>
-        <input type="text" id="sv-host" placeholder="203.0.113.10 или server.example.com"></label>
+        <input type="text" id="sv-host" placeholder="server.example.com или IP-адрес"></label>
       <label class="field" style="width:100px"><span>Порт</span>
         <input type="number" id="sv-port" value="22"></label>
     </div>

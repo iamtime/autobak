@@ -4,7 +4,7 @@
 
 Server backups: websites, databases, Docker, configs. One binary on the
 server, a window on your machine or a web UI. Data is encrypted before it
-leaves, identical chunks are stored once — only new data crosses the network.
+leaves, identical chunks are stored once - only new data crosses the network.
 
 ```
 first backup                    11.7 MB of data, 11.7 MB over the wire
@@ -14,7 +14,11 @@ after editing 1 file out of 12  38 bytes over the wire
 
 ## Install
 
-Go 1.26 required. If you don't have it yet:
+Prebuilt Windows binaries need no Go:
+[latest release](https://github.com/iamtime/autobak/releases/latest) - `autobak.exe` (window) and
+`autobak-cli.exe` (command line).
+
+Everything else is built from source. Go 1.26 required. If you don't have it yet:
 
 ```powershell
 # Windows
@@ -56,7 +60,7 @@ Then choose where to drive it from.
 .\dist\autobak.exe        # Windows
 ```
 
-Attach storage (disk or S3), add a server, hit **Discover** — the agent finds
+Attach storage (disk or S3), add a server, hit **Discover** - the agent finds
 sites, databases and configs itself. Tick what you need, hit **Backup**.
 
 ## Web UI on a dedicated box
@@ -67,7 +71,7 @@ Bought a server for backups, installed docker:
 cd deploy/web
 echo "AUTOBAK_PASSWORD=a-long-password" > .env
 docker compose up -d
-docker compose logs        # the SSH public key is here — deploy it to your servers
+docker compose logs        # the SSH public key is here - deploy it to your servers
 ```
 
 Open `http://127.0.0.1:8080`. Expose it only behind a TLS proxy
@@ -77,7 +81,7 @@ Open `http://127.0.0.1:8080`. Expose it only behind a TLS proxy
 
 ```sh
 autobak repo add --name main --kind s3 --endpoint s3.example.com --bucket backups
-autobak server add --name prod --host 203.0.113.10 --repo main
+autobak server add --name prod --host server.example.com --repo main
 autobak server plan prod --apply
 autobak backup prod
 autobak restore prod <snapshot>     # dry run by default
@@ -100,19 +104,19 @@ The web container runs the schedule itself.
 ## Security in a nutshell
 
 - The agent runs over SSH, listens on no ports. Its key is restricted to
-  `command="... serve --backup-only --allow=/var/www",restrict` — no shell,
+  `command="... serve --backup-only --allow=/var/www",restrict` - no shell,
   no reads outside the allowed directories.
 - `XChaCha20-Poly1305` encryption before upload, a separate key per server.
 - Restore and snapshot deletion require typing the server name.
-- **For push mode, enable versioning and Object Lock on the S3 bucket** —
+- **For push mode, enable versioning and Object Lock on the S3 bucket** -
   that alone protects past backups from ransomware.
 
 ## More
 
-- Step-by-step setup for Windows + a Linux server — [QUICKSTART.md](QUICKSTART.md) (in Russian)
-- Full design, every command and mode — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Step-by-step setup for Windows + a Linux server - [QUICKSTART.md](QUICKSTART.md) (in Russian)
+- Full design, every command and mode - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Per-OS builds, autostart, push mode, Kubernetes, git config history,
-  a second repository — all there.
-- Reporting a vulnerability — [SECURITY.md](SECURITY.md)
+  a second repository - all there.
+- Reporting a vulnerability - [SECURITY.md](SECURITY.md)
 
 Licensed under [MIT](LICENSE).
